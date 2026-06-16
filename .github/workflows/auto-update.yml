@@ -1,0 +1,163 @@
+name: Auto-update plugins
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # понедельник 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  ECLIPSE_URL: "https://archive.eclipse.org/eclipse/downloads/drops4/R-4.36-202505281830/eclipse-platform-4.36-win32-x86_64.zip"
+
+jobs:
+  # 1) Проверка обновлений по таргету: бампит манифест локально, отдаёт его + флаги артефактом.
+  bump:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ['2025.2', '2026.1']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: chk
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST: manifests/${{ matrix.target }}.json
+        run: ./scripts/check-updates.ps1
+      - name: Собрать meta-артефакт
+        shell: bash
+        run: |
+          mkdir -p out
+          echo "${{ steps.chk.outputs.changed }}"  > out/changed.txt
+          echo "${{ steps.chk.outputs.version }}"  > out/version.txt
+          echo "${{ steps.chk.outputs.summary }}"  > out/summary.txt
+          cp "manifests/${{ matrix.target }}.json" out/manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-${{ matrix.target }}
+          path: out/
+
+  # 2) Сборка с (возможно) обновлённым манифестом.
+  build:
+    needs: bump
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ['2025.2', '2026.1']
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: meta-${{ matrix.target }}
+          path: meta
+      - name: Применить обновлённый манифест
+        shell: pwsh
+        run: Copy-Item meta\manifest.json "manifests\${{ matrix.target }}.json" -Force
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Скачать Eclipse Platform
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Invoke-WebRequest -Uri $env:ECLIPSE_URL -OutFile "$env:RUNNER_TEMP\eclipse.zip" -UseBasicParsing
+          Expand-Archive "$env:RUNNER_TEMP\eclipse.zip" "$env:RUNNER_TEMP\ecl" -Force
+          "ECLIPSE_HOME=$(Join-Path "$env:RUNNER_TEMP\ecl" 'eclipse')" >> $env:GITHUB_ENV
+      - name: Build
+        shell: pwsh
+        run: |
+          .\scripts\build.ps1 -Target ${{ matrix.target }}
+          .\scripts\ci-validate.ps1
+          Copy-Item build\ius.txt build\dist\
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pack-${{ matrix.target }}
+          path: build/dist/*
+          if-no-files-found: error
+
+  # 3) Verify на реальной EDT (self-hosted). Если упадёт — job красный, release не будет.
+  verify:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ['2025.2', '2026.1']
+    runs-on: [self-hosted, edt]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pack-${{ matrix.target }}
+          path: artifact
+      - name: Verify install on EDT ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* | head -1)
+          ZIP=$(ls artifact/*.zip | head -1)
+          IUS=$(tr -d '\r' < artifact/ius.txt | paste -sd, -)
+          chmod +x scripts/verify.sh
+          export VERIFY_SANDBOX="/tmp/verify-${{ matrix.target }}-${GITHUB_RUN_ID}"
+          scripts/verify.sh "$EDT_HOME" "jar:file:$(realpath "$ZIP")!/" "$IUS"
+
+  # 4) Коммит бампов в main + ОДИН релиз с двумя архивами — только если verify прошёл И что-то изменилось.
+  commit-release:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: meta-*
+          path: meta
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pack-*
+          path: artifacts
+          merge-multiple: true
+      - name: Commit bumps & combined release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CH25=$(cat meta/meta-2025.2/changed.txt); CH26=$(cat meta/meta-2026.1/changed.txt)
+          if [ "$CH25" != "true" ] && [ "$CH26" != "true" ]; then echo "обновлений нет"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          SUM=""
+          if [ "$CH25" = "true" ]; then cp meta/meta-2025.2/manifest.json manifests/2025.2.json; git add manifests/2025.2.json; SUM="$SUM 2025.2: $(cat meta/meta-2025.2/summary.txt);"; fi
+          if [ "$CH26" = "true" ]; then cp meta/meta-2026.1/manifest.json manifests/2026.1.json; git add manifests/2026.1.json; SUM="$SUM 2026.1: $(cat meta/meta-2026.1/summary.txt);"; fi
+          git commit -m "chore: авто-обновление —$SUM"
+          git push origin main
+          VER=$(jq -r .package.version manifests/2025.2.json)
+          TAG="v$VER"
+          ZIPS=$(ls artifacts/*.zip)
+          NOTES=$(bash scripts/release-notes.sh "$VER" "Авто-обновление:$SUM")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $ZIPS --clobber
+            gh release edit "$TAG" --title "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" $ZIPS --title "$TAG" --notes "$NOTES"
+          fi
+
+  # 5) Если что-то упало (напр. verify зарубил несовместимый бамп) — issue.
+  on-failure:
+    needs: [bump, build, verify, commit-release]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Авто-обновление не прошло ($(date -u +%Y-%m-%d))" \
+            --body "Прогон авто-обновления завершился с ошибкой (возможно, новая версия плагина не ставится на EDT — verify зарубил релиз). Лог: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true

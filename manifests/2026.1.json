@@ -1,0 +1,174 @@
+{
+  "package": {
+    "name": "EDT-Plugin-Pack",
+    "edtLine": "2026.1",
+    "version": "1.0.1"
+  },
+  "edtHome": "C:\\Program Files\\1C\\1CE\\components\\1c-edt-2025.2.6+4-x86_64",
+  "jdkGlob": "C:\\Program Files\\1C\\1CE\\components\\axiom-jdk-full-*",
+  "categories": {
+    "main": {
+      "id": "edt.pack.main",
+      "label": "Набор плагинов 1C:EDT",
+      "description": "Полезные плагины 1C:EDT — установить всё разом"
+    },
+    "mcp": {
+      "id": "edt.pack.mcp",
+      "label": "EDT MCP (AGPL-3.0)",
+      "description": "MCP-сервер для AI-ассистентов. Лицензия AGPL-3.0, ставится отдельно."
+    }
+  },
+  "yaxunit": {
+    "version": "25.12",
+    "license": "Apache-2.0",
+    "update": {
+      "repo": "bia-technologies/yaxunit",
+      "asset": "\\.cfe$"
+    },
+    "assets": [
+      "https://github.com/bia-technologies/yaxunit/releases/download/25.12/YAxUnit-25.12.cfe",
+      "https://github.com/bia-technologies/yaxunit/releases/download/25.12/Smoke-25.12.cfe"
+    ]
+  },
+  "plugins": [
+    {
+      "id": "edt-extension-tweaks",
+      "name": "EDT Extension Tweaks",
+      "version": "1.1.2",
+      "license": "EPL-2.0",
+      "category": "main",
+      "featureId": "ru.xelgo.edt.contextlinks.feature",
+      "repoUrl": "https://github.com/Xelgo/edt-extension-tweaks",
+      "update": {
+        "kind": "gh-release",
+        "repo": "Xelgo/edt-extension-tweaks",
+        "asset": "edt-extension-tweaks-update-site.*\\.zip",
+        "hold": true
+      },
+      "source": {
+        "type": "zip",
+        "url": "https://github.com/Xelgo/edt-extension-tweaks/releases/download/v1.1.2/edt-extension-tweaks-update-site.zip"
+      },
+      "comment": "закреплено на 1.1.2 по запросу — авто-бамп выключен (hold)"
+    },
+    {
+      "id": "edt-editing",
+      "name": "Disable Editing Plugin",
+      "version": "0.6.0",
+      "license": "EPL-2.0",
+      "category": "main",
+      "featureId": "org.mard.dt.editing.feature",
+      "repoUrl": "https://gitlab.com/marmyshev/edt-editing",
+      "comment": "0.7.0 требует Guava 33.5, которой нет ни в 2025.2, ни в 2026.1 → пин 0.6.0 (проверено verify)",
+      "update": {
+        "kind": "gitlab-package",
+        "project": "marmyshev/edt-editing",
+        "package": "zip-p2",
+        "hold": true
+      },
+      "source": {
+        "type": "gitlab-package",
+        "project": "marmyshev/edt-editing",
+        "package": "zip-p2",
+        "packageVersion": "0.6.0",
+        "file": "repo.zip"
+      }
+    },
+    {
+      "id": "edt-test-runner",
+      "name": "EDT Test Runner",
+      "version": "25.01",
+      "license": "Apache-2.0",
+      "category": "main",
+      "featureId": "ru.biatech.edt.xtest.feature",
+      "repoUrl": "https://github.com/bia-technologies/edt-test-runner",
+      "update": {
+        "kind": "gh-release",
+        "repo": "bia-technologies/edt-test-runner",
+        "asset": "edt-test-runner\\..*\\.zip"
+      },
+      "source": {
+        "type": "zip",
+        "url": "https://github.com/bia-technologies/edt-test-runner/releases/download/25.01/edt-test-runner.25.01.zip"
+      }
+    },
+    {
+      "id": "plugin-edt",
+      "name": "Configuration Repository (PluginEDT)",
+      "version": "0.4.0",
+      "license": "EPL-2.0",
+      "category": "main",
+      "featureId": "dev.zigr.dt.team.ui.storage.feature",
+      "repoUrl": "https://github.com/ZigRinat85/PluginEDT",
+      "update": {
+        "kind": "gh-release",
+        "repo": "ZigRinat85/PluginEDT",
+        "asset": "build\\.zip"
+      },
+      "source": {
+        "type": "zip",
+        "url": "https://github.com/ZigRinat85/PluginEDT/releases/download/v0.4.0/build.zip"
+      }
+    },
+    {
+      "id": "edt-mcp",
+      "name": "EDT MCP Server",
+      "version": "2.3.1",
+      "license": "AGPL-3.0",
+      "category": "mcp",
+      "featureId": "com.ditrix.edt.mcp.server.feature",
+      "repoUrl": "https://github.com/DitriXNew/EDT-MCP",
+      "update": {
+        "kind": "gh-release",
+        "repo": "DitriXNew/EDT-MCP",
+        "asset": "MCP-EDT\\.v.*\\.zip"
+      },
+      "source": {
+        "type": "zip",
+        "url": "https://github.com/DitriXNew/EDT-MCP/releases/download/v2.3.1/MCP-EDT.v2.3.1.zip"
+      }
+    },
+    {
+      "id": "edt-anyedit",
+      "name": "AnyEdit Tools",
+      "version": "2.7.3",
+      "license": "EPL-2.0",
+      "category": "main",
+      "featureId": "AnyEditTools",
+      "repoUrl": "https://github.com/iloveeclipse/anyedittools",
+      "update": {
+        "kind": "gh-jars",
+        "repo": "iloveeclipse/anyedittools",
+        "featureAsset": "^AnyEditTools_.*\\.jar$",
+        "pluginAsset": "^de\\.loskutov\\.anyedit\\.AnyEditTools_.*\\.jar$"
+      },
+      "source": {
+        "type": "p2-publish",
+        "features": [
+          "https://github.com/iloveeclipse/anyedittools/releases/download/2.7.3/AnyEditTools_2.7.3.202502241151.jar"
+        ],
+        "plugins": [
+          "https://github.com/iloveeclipse/anyedittools/releases/download/2.7.3/de.loskutov.anyedit.AnyEditTools_2.7.3.202502241151.jar"
+        ]
+      }
+    },
+    {
+      "id": "indent-guide",
+      "name": "IndentGuide",
+      "version": "2.2.5",
+      "license": "MIT",
+      "category": "main",
+      "featureId": "net.certiv.tools.indentguide.feature",
+      "repoUrl": "https://github.com/marmyshev/indent-guide",
+      "update": {
+        "kind": "gh-release",
+        "repo": "marmyshev/indent-guide",
+        "asset": "repo\\.zip"
+      },
+      "source": {
+        "type": "zip",
+        "url": "https://github.com/marmyshev/indent-guide/releases/download/v2.2.5/repo.zip"
+      }
+    }
+  ]
+}

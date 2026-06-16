@@ -1,0 +1,107 @@
+name: Build, Verify & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Создать GitHub Release (после успешного verify)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  ECLIPSE_URL: "https://archive.eclipse.org/eclipse/downloads/drops4/R-4.36-202505281830/eclipse-platform-4.36-win32-x86_64.zip"
+
+jobs:
+  # 1) Сборка набора в облаке (ванильный Eclipse, без 1C:EDT) — по таргету.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ['2025.2', '2026.1']
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Скачать Eclipse Platform (p2-инструменты)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest -Uri $env:ECLIPSE_URL -OutFile "$env:RUNNER_TEMP\eclipse.zip" -UseBasicParsing
+          Expand-Archive -Path "$env:RUNNER_TEMP\eclipse.zip" -DestinationPath "$env:RUNNER_TEMP\ecl" -Force
+          $eclHome = Join-Path "$env:RUNNER_TEMP\ecl" 'eclipse'
+          if (-not (Get-ChildItem (Join-Path $eclHome 'plugins') -Filter 'org.eclipse.equinox.launcher_*.jar')) { throw "launcher не найден" }
+          "ECLIPSE_HOME=$eclHome" >> $env:GITHUB_ENV
+      - name: Собрать набор (${{ matrix.target }})
+        shell: pwsh
+        run: .\scripts\build.ps1 -Target ${{ matrix.target }}
+      - name: Валидация p2-метаданных
+        shell: pwsh
+        run: .\scripts\ci-validate.ps1
+      - name: Подготовить артефакт (zip + ius.txt)
+        shell: pwsh
+        run: Copy-Item build\ius.txt build\dist\
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pack-${{ matrix.target }}
+          path: build/dist/*
+          if-no-files-found: error
+
+  # 2) Проверка установки на РЕАЛЬНОЙ 1C:EDT (self-hosted runner на LXC 107) — по таргету.
+  verify:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ['2025.2', '2026.1']
+    runs-on: [self-hosted, edt]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pack-${{ matrix.target }}
+          path: artifact
+      - name: Verify install on EDT ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* | head -1)
+          [ -n "$EDT_HOME" ] || { echo "EDT ${{ matrix.target }} не установлена на раннере"; exit 1; }
+          ZIP=$(ls artifact/*.zip | head -1)
+          IUS=$(tr -d '\r' < artifact/ius.txt | paste -sd, -)
+          chmod +x scripts/verify.sh
+          export VERIFY_SANDBOX="/tmp/verify-${{ matrix.target }}-${GITHUB_RUN_ID}"
+          scripts/verify.sh "$EDT_HOME" "jar:file:$(realpath "$ZIP")!/" "$IUS"
+
+  # 3) ОДИН релиз с ДВУМЯ архивами (2025.2 и 2026.1) — только если verify прошёл и release=true.
+  release:
+    needs: verify
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pack-*
+          path: artifacts
+          merge-multiple: true
+      - name: Создать единый релиз с двумя архивами
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VER=$(jq -r .package.version manifests/2025.2.json)
+          TAG="v$VER"
+          ZIPS=$(ls artifacts/*.zip)
+          NOTES=$(bash scripts/release-notes.sh "$VER")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $ZIPS --clobber
+            gh release edit "$TAG" --title "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" $ZIPS --title "$TAG" --notes "$NOTES"
+          fi

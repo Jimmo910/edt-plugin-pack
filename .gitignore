@@ -1,0 +1,20 @@
+# Сборка и временные артефакты
+/build/
+/target/
+/work/
+/mirror/
+/downloads/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Внутренняя инфраструктура и дистрибутивы — не публикуем
+*GitLab_CI-runner*.md
+*.tar.gz
+
+# Локальный контекст и внутренние материалы — не в публичном репозитории
+CLAUDE.md
+.claude/
+docs/
