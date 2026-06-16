@@ -18,3 +18,6 @@ Thumbs.db
 CLAUDE.md
 .claude/
 docs/
+
+# Генерируется categorize.ps1 при сборке — не держим в git
+/p2/

@@ -1,0 +1,12 @@
+# Нормализация окончаний строк. Bash/YAML — строго LF (иначе self-hosted Linux runner
+# спотыкается на shebang/CRLF; проект из-за этого уже вынужден чистить \r).
+* text=auto eol=lf
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.ps1  text eol=crlf
+*.png  binary
+*.zip  binary
+*.jar  binary
+*.cfe  binary

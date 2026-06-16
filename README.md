@@ -2,90 +2,100 @@
 
 [![Build, Verify & Release](https://github.com/Jimmo910/edt-plugin-pack/actions/workflows/build-release.yml/badge.svg)](https://github.com/Jimmo910/edt-plugin-pack/actions/workflows/build-release.yml)
 [![Auto-update plugins](https://github.com/Jimmo910/edt-plugin-pack/actions/workflows/auto-update.yml/badge.svg)](https://github.com/Jimmo910/edt-plugin-pack/actions/workflows/auto-update.yml)
+[![Последний релиз](https://img.shields.io/github/v/release/Jimmo910/edt-plugin-pack)](https://github.com/Jimmo910/edt-plugin-pack/releases/latest)
 [![1C:EDT](https://img.shields.io/badge/1C%3AEDT-2025.2%20%7C%202026.1-blue)](https://edt.1c.ru/)
 
-Единый офлайн-набор полезных **сторонних** плагинов для 1C:EDT. Один архив = один p2 update site,
-где галочкой на категории ставятся сразу все плагины. Поддерживаются **две линейки EDT — 2025.2 и 2026.1**,
-под каждую собирается свой архив, проверенный установкой на реальную EDT этой версии.
+Один установочный архив, который ставит сразу несколько полезных **сторонних** плагинов в 1C:EDT —
+галочкой на одной категории. Поддерживаются версии EDT **2025.2** и **2026.1** (под каждую свой архив,
+проверенный установкой на реальную EDT).
+
+## Что входит в набор
+
+| Плагин | Версия | Лицензия | Что делает |
+|--------|--------|----------|------------|
+| [EDT Extension Tweaks](https://github.com/Xelgo/edt-extension-tweaks) | 1.1.2 | EPL-2.0 | общий BSL-контекст, конструктор запросов, цепочки обновления |
+| [Disable Editing Plugin](https://gitlab.com/marmyshev/edt-editing) | 0.6.0 | EPL-2.0 | объекты «только для чтения» по правилам |
+| [EDT Test Runner](https://github.com/bia-technologies/edt-test-runner) | 25.01 | Apache-2.0 | запуск/отладка юнит-тестов (YAXUnit) |
+| [Configuration Repository (PluginEDT)](https://github.com/ZigRinat85/PluginEDT) | 0.4.0 | EPL-2.0 | работа с хранилищем конфигурации 1С |
+| [AnyEdit Tools](https://github.com/iloveeclipse/anyedittools) | 2.7.3 | EPL-2.0 | сравнение, буфер обмена, автоформат |
+| [IndentGuide](https://github.com/marmyshev/indent-guide) | 2.2.5 | MIT | направляющие отступов в редакторе |
+| [EDT MCP Server](https://github.com/DitriXNew/EDT-MCP) | 2.3.1 | **AGPL-3.0** | MCP-сервер для AI-ассистентов _(отдельная категория)_ |
+| [YAXUnit](https://github.com/bia-technologies/yaxunit) | 25.12 | Apache-2.0 | движок тестов — расширение 1С `.cfe` (не плагин EDT, ставится в ИБ) |
+
+Составы под 2025.2 и 2026.1 сейчас идентичны.
+
+## Требования
+- Установленная **1C:EDT 2025.2 или 2026.1** — больше для установки ничего не нужно.
+- (Только для сборки из исходников: PowerShell 7+, Java 17 — берётся из состава EDT.)
 
 ## Скачать
-
-На странице [Releases](https://github.com/Jimmo910/edt-plugin-pack/releases) — **последний релиз `vX.Y.Z`
-с двумя архивами**. Скачайте тот, что под вашу версию 1C:EDT:
+На странице [Releases](https://github.com/Jimmo910/edt-plugin-pack/releases) — последний релиз `vX.Y.Z`
+**с двумя архивами**. Скачайте под свою версию EDT:
 
 | Ваша 1C:EDT | Файл |
 |-------------|------|
 | **2025.2**  | `EDT-Plugin-Pack-2025.2-X.Y.Z.zip` |
 | **2026.1**  | `EDT-Plugin-Pack-2026.1-X.Y.Z.zip` |
 
-Оба архива **проверены установкой на реальную 1C:EDT соответствующей версии** (self-hosted runner).
-
 ## Установка
 
 ### Плагины EDT
-1. В 1C:EDT: **Справка → Установить новое ПО…** (Install New Software) → **Add… → Archive…**
-   и выбрать скачанный `EDT-Plugin-Pack-<версия>.zip`.
-2. Отметить категорию **«Набор плагинов 1C:EDT»** — она поставит все плагины разом.
-   Категория **«EDT MCP (AGPL-3.0)»** — опционально (см. лицензии ниже).
-3. Снизу **снять** галку «Обращаться ко всем сайтам обновления…» (чтобы p2 не опрашивал
-   посторонние, возможно мёртвые, сайты — ставим только из этого архива).
-4. Принять лицензии, «Install anyway» на предупреждении о неподписанном содержимом, перезапустить EDT.
+1. В 1C:EDT: **Справка → Установить новое ПО…** (Install New Software) → **Add… → Archive…** → выбрать скачанный архив.
+2. Отметить категорию **«Набор плагинов 1C:EDT»** — поставит все плагины разом
+   (категория **«EDT MCP (AGPL-3.0)»** — опционально).
+3. Внизу **снять** галку «Обращаться ко всем сайтам обновления…».
+4. Далее → принять лицензии → «Install anyway» на предупреждении о подписи → перезапустить EDT.
 
-Архив самодостаточен: в корне — p2-репозиторий (`content.jar`/`artifacts.jar`/`plugins/`/`features/`),
-рядом папки `yaxunit/` и `licenses/` (Eclipse их при установке игнорирует).
+> _(сюда хорошо бы добавить скриншот диалога «Install New Software» — TODO)_
 
-### YAXUnit (нужен для edt-test-runner)
-`YAXUnit` — это **расширение конфигурации 1С** (`.cfe`), а не плагин EDT. Файл из папки
-`yaxunit/` загрузить в информационную базу (Конфигуратор → Расширения конфигурации) или
-импортировать в EDT-проект. Подробнее — `yaxunit/README.txt`.
+### YAXUnit (для запуска тестов)
+`YAXUnit` — это **расширение конфигурации 1С** (`.cfe`), а не плагин EDT. Из папки `yaxunit/` в архиве
+загрузите `.cfe` в информационную базу (Конфигуратор → Расширения конфигурации). Нужен для `edt-test-runner`.
 
-## Состав пакета
+## FAQ
+- **«Невозможно найти … .zip!/» при установке.** Указывайте архив через **Add → Archive**; архив самодостаточен
+  (p2-репозиторий лежит в корне, папки `yaxunit/`/`licenses/` Eclipse игнорирует).
+- **Просит «Install anyway» из-за подписи.** Это нормально — community-плагины не подписаны.
+- **Зачем снимать «обращаться ко всем сайтам».** Чтобы p2 не опрашивал посторонние (возможно мёртвые)
+  сайты из вашего списка и ставил только из этого архива.
+- **Плагин не нужен / мешает.** Снять можно через Справка → О программе → Сведения об установке → Uninstall.
+- **Не нашли нужный плагин / что-то не ставится.** Заведите [issue](https://github.com/Jimmo910/edt-plugin-pack/issues).
 
-| Плагин | Версия | Лицензия | Категория | Источник |
-|--------|--------|----------|-----------|----------|
-| EDT Extension Tweaks | 1.1.2 | EPL-2.0 | основная | [Xelgo/edt-extension-tweaks](https://github.com/Xelgo/edt-extension-tweaks) |
-| Disable Editing Plugin | 0.6.0 | EPL-2.0 | основная | [marmyshev/edt-editing](https://gitlab.com/marmyshev/edt-editing) |
-| EDT Test Runner | 25.01 | Apache-2.0 | основная | [bia-technologies/edt-test-runner](https://github.com/bia-technologies/edt-test-runner) |
-| Configuration Repository (PluginEDT) | 0.4.0 | EPL-2.0 | основная | [ZigRinat85/PluginEDT](https://github.com/ZigRinat85/PluginEDT) |
-| AnyEdit Tools (сравнение, буфер, автоформат) | 2.7.3 | EPL-2.0 | основная | [iloveeclipse/anyedittools](https://github.com/iloveeclipse/anyedittools) |
-| IndentGuide (направляющие отступов) | 2.2.5 | MIT | основная | [marmyshev/indent-guide](https://github.com/marmyshev/indent-guide) |
-| EDT MCP Server | 2.3.1 | **AGPL-3.0** | **EDT MCP (отдельная)** | [DitriXNew/EDT-MCP](https://github.com/DitriXNew/EDT-MCP) |
-| YAXUnit (расширение 1С, не плагин) | 25.12 | Apache-2.0 | в архиве `yaxunit/` | [bia-technologies/yaxunit](https://github.com/bia-technologies/yaxunit) |
+## Лицензии
+Включаются только плагины, чьи лицензии допускают повторное распространение. Тексты — в `licenses/`,
+сводка по дистрибутиву — `licenses/NOTICES.md`. EDT MCP (AGPL-3.0) включён неизменённым, отдельной
+категорией, со ссылкой на исходники (AGPL §6). Сам инструментарий репозитория — под [MIT](LICENSE).
 
-Версии пинуются отдельно для каждой линейки EDT (`manifests/2025.2.json`, `manifests/2026.1.json`).
-Сейчас составы совпадают; **edt-editing зафиксирован на 0.6.0** (`hold`): 0.7.0 требует Guava 33.5,
-которой нет ни в 2025.2, ни в 2026.1 — verify это подтвердил.
+---
 
-**Отложен:** `edt.cf_builder` (импорт/экспорт CF/CFE) — технически ставится, но в репозитории
-**нет файла LICENSE**, распространять в составе сборки нельзя (ждём ответа автора по issue).
+## Для сопровождающих
 
-## CI / автоматизация
-
-Конвейер на GitHub Actions, по каждой линейке EDT (матрица `[2025.2, 2026.1]`):
-
-- **Build, Verify & Release** (`build-release.yml`, по кнопке): `build` (облачный Windows-раннер,
-  ванильный Eclipse) → `verify` (**self-hosted runner с реальной 1C:EDT**, установка набора через
-  p2 director) → `release` (только при успешном verify; отдельный релиз на каждую линейку).
-- **Auto-update plugins** (`auto-update.yml`, пн 06:00 UTC + по кнопке): сверяет версии плагинов
-  с upstream (GitHub/GitLab), бампит манифест → собирает → **verify на реальной EDT (gate)** →
-  при успехе коммитит бамп и публикует релиз; если новая версия не ставится — релиза нет,
-  заводится issue. Плагины с `update.hold=true` авто-бамп пропускают.
-
-Верификация на реальной EDT выполняется на self-hosted runner с установленными 1C:EDT 2025.2 и 2026.1.
-
-## Сборка из исходников (локально)
-
-Требуется установленная 1C:EDT (любая из линеек — как источник штатных p2-инструментов).
-
+### Сборка из исходников
 ```powershell
 pwsh -NoProfile -File scripts/build.ps1 -Target 2025.2   # или -Target 2026.1
 ```
+Результат — `build/dist/EDT-Plugin-Pack-<edtLine>-<версия>.zip`. Проверка установки на копии EDT:
+`scripts/verify.ps1` (Windows) или `scripts/verify.sh` (Linux). Папка `build/` — рабочая, в git не попадает.
+`p2/category.xml` генерируется при сборке (в git его нет).
 
-Результат — `build/dist/EDT-Plugin-Pack-<target>-<версия>.zip`. Папка `build/` — рабочая, в git не попадает.
-Состав правится в `manifests/<target>.json`. Проверка установки: `scripts/verify.ps1` (Windows) или
-`scripts/verify.sh` (Linux, self-hosted).
+### Как добавить плагин или версию EDT
+Добавить **плагин** — объект в `plugins[]` в `manifests/2025.2.json` и `manifests/2026.1.json`:
+`id`, `name`, `version`, `license`, `category` (`main`/`mcp`), `featureId` (точный id фичи →
+IU `<featureId>.feature.group`), `repoUrl`, блок `source` (`zip` | `gitlab-package` | `p2-publish`) и
+блок `update` для авто-обновления (`gh-release` | `gh-jars` | `gitlab-package`; `hold:true` — заморозить версию).
+Правило: **без файла LICENSE в апстриме плагин не добавляем** (см. отложенный `edt.cf_builder`).
+Проверьте локально `build.ps1 -Target … && verify.ps1`.
 
-## Лицензии
-В пакет включаются только плагины, чьи лицензии допускают повторное распространение.
-Тексты лицензий и перечень компонентов — в `licenses/` (внутри дистрибутива — `licenses/NOTICES.md`).
-EDT MCP (AGPL-3.0) включён неизменённым, отдельной опциональной категорией, со ссылкой на исходники (AGPL §6).
+Добавить **версию EDT** (напр. 2026.2): создать `manifests/2026.2.json`, установить эту EDT на self-hosted
+runner, добавить `'2026.2'` в матрицы `target` в обоих workflow.
+
+### CI / автоматизация
+Матрица `[2025.2, 2026.1]`: **build** (облачный Windows + ванильный Eclipse, без 1C:EDT) → **verify**
+(self-hosted runner с реальной 1C:EDT обеих версий) → **release** (один релиз `vX.Y.Z` с двумя архивами,
+только при успешном verify). **Auto-update** (пн 06:00 UTC + кнопка) сверяет версии с upstream, собирает,
+проверяет на реальной EDT и при успехе выпускает релиз; несовместимая версия release не проходит — заводится issue.
+
+### Политика версий и `hold`
+Версия пакета (`package.version`) единая для обоих архивов, патч бампается авто-обновлением.
+`update.hold:true` фиксирует версию плагина. Сейчас зафиксированы: **edt-editing 0.6.0** (0.7.0 требует
+Guava 33.5, которой нет в обеих EDT) и **edt-extension-tweaks 1.1.2** (по запросу).
