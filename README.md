@@ -13,7 +13,7 @@
 
 | Плагин | Версия | Лицензия | Что делает |
 |--------|--------|----------|------------|
-| [EDT Extension Tweaks](https://github.com/Xelgo/edt-extension-tweaks) | 1.1.2 | EPL-2.0 | общий BSL-контекст, конструктор запросов, цепочки обновления |
+| [EDT Extension Tweaks](https://github.com/Xelgo/edt-extension-tweaks) | 1.1.8 | EPL-2.0 | общий BSL-контекст, конструктор запросов, цепочки обновления |
 | [Disable Editing Plugin](https://gitlab.com/marmyshev/edt-editing) | 0.6.0 | EPL-2.0 | объекты «только для чтения» по правилам |
 | [EDT Test Runner](https://github.com/bia-technologies/edt-test-runner) | 25.01 | Apache-2.0 | запуск/отладка юнит-тестов (YAXUnit) |
 | [Configuration Repository (PluginEDT)](https://github.com/ZigRinat85/PluginEDT) | 0.4.0 | EPL-2.0 | работа с хранилищем конфигурации 1С |
@@ -97,5 +97,5 @@ runner, добавить `'2026.2'` в матрицы `target` в обоих wor
 
 ### Политика версий и `hold`
 Версия пакета (`package.version`) единая для обоих архивов, патч бампается авто-обновлением.
-`update.hold:true` фиксирует версию плагина. Сейчас зафиксированы: **edt-editing 0.6.0** (0.7.0 требует
-Guava 33.5, которой нет в обеих EDT) и **edt-extension-tweaks 1.1.2** (по запросу).
+`update.hold:true` фиксирует версию плагина. Сейчас зафиксирован: **edt-editing 0.6.0** (0.7.0 требует
+Guava 33.5, которой нет в обеих EDT).
