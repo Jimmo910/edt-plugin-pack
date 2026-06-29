@@ -135,6 +135,8 @@ jobs:
           SUM=""
           if [ "$CH25" = "true" ]; then cp meta/meta-2025.2/manifest.json manifests/2025.2.json; git add manifests/2025.2.json; SUM="$SUM 2025.2: $(cat meta/meta-2025.2/summary.txt);"; fi
           if [ "$CH26" = "true" ]; then cp meta/meta-2026.1/manifest.json manifests/2026.1.json; git add manifests/2026.1.json; SUM="$SUM 2026.1: $(cat meta/meta-2026.1/summary.txt);"; fi
+          pwsh scripts/sync-readme.ps1   # привести версии в README к манифестам
+          git add README.md
           git commit -m "chore: авто-обновление —$SUM"
           git push origin main
           VER=$(jq -r .package.version manifests/2025.2.json)
