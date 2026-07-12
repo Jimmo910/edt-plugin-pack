@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* | head -1)
+          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* | sort -V | tail -1)
           [ -n "$EDT_HOME" ] || { echo "EDT ${{ matrix.target }} не установлена на раннере"; exit 1; }
           ZIP=$(ls artifact/*.zip | head -1)
           IUS=$(tr -d '\r' < artifact/ius.txt | paste -sd, -)
