@@ -105,3 +105,12 @@ jobs:
           else
             gh release create "$TAG" $ZIPS --title "$TAG" --notes "$NOTES"
           fi
+
+  # 4) Публикация update site на GitHub Pages — из артефактов ЭТОГО прогона (прошли verify).
+  publish-pages:
+    needs: release
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/publish-pages.yml

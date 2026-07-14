@@ -110,6 +110,8 @@ jobs:
   commit-release:
     needs: verify
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.cr.outputs.released }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -122,12 +124,13 @@ jobs:
           path: artifacts
           merge-multiple: true
       - name: Commit bumps & combined release
+        id: cr
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           CH25=$(cat meta/meta-2025.2/changed.txt); CH26=$(cat meta/meta-2026.1/changed.txt)
-          if [ "$CH25" != "true" ] && [ "$CH26" != "true" ]; then echo "обновлений нет"; exit 0; fi
+          if [ "$CH25" != "true" ] && [ "$CH26" != "true" ]; then echo "обновлений нет"; echo "released=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
@@ -149,10 +152,21 @@ jobs:
           else
             gh release create "$TAG" $ZIPS --title "$TAG" --notes "$NOTES"
           fi
+          echo "released=true" >> "$GITHUB_OUTPUT"
 
-  # 5) Если что-то упало (напр. verify зарубил несовместимый бамп) — issue.
+  # 5) Публикация update site на Pages — только если релиз реально был.
+  publish-pages:
+    needs: commit-release
+    if: ${{ needs.commit-release.outputs.released == 'true' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/publish-pages.yml
+
+  # 6) Если что-то упало (напр. verify зарубил несовместимый бамп) — issue.
   on-failure:
-    needs: [bump, build, verify, commit-release]
+    needs: [bump, build, verify, commit-release, publish-pages]
     if: failure()
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,101 @@
+name: Publish update site (Pages)
+
+# Публикует p2 update site на GitHub Pages: site/<линия EDT>/ = корень p2-репозитория.
+# Вызывается из релизных workflow (source=run: артефакты pack-* ТЕКУЩЕГО прогона,
+# т.е. ровно то, что прошло verify) или вручную (source=release: zip последнего релиза).
+# ВАЖНО: источник различаем input'ом, а не github.event_name — в called-workflow
+# event_name наследуется от вызывающего прогона (у build-release это workflow_dispatch).
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: "run — артефакты текущего прогона; release — zip последнего релиза"
+        type: string
+        required: false
+        default: run
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Источник (release — zip последнего релиза)"
+        type: string
+        required: false
+        default: release
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Артефакты текущего прогона
+        if: inputs.source == 'run'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pack-*
+          path: packs
+          merge-multiple: true
+
+      - name: Архивы последнего релиза
+        if: inputs.source == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p packs
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern 'EDT-Plugin-Pack-*.zip' --dir packs
+
+      - name: Собрать сайт (site/<линия>/ = p2-репозиторий)
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          ver=""
+          lines=""
+          for z in packs/EDT-Plugin-Pack-*.zip; do
+            base=$(basename "$z" .zip)
+            line=$(echo "$base" | sed -E 's/^EDT-Plugin-Pack-([0-9]+\.[0-9]+)-.*/\1/')
+            ver=$(echo "$base" | sed -E 's/^EDT-Plugin-Pack-[0-9]+\.[0-9]+-(.*)$/\1/')
+            mkdir -p "site/$line"
+            unzip -q "$z" -d "site/$line"
+            lines="$lines $line"
+            echo "site/$line <- $base"
+          done
+          [ -n "$ver" ] || { echo "не найдено ни одного zip в packs/"; exit 1; }
+          touch site/.nojekyll
+          BASE="https://jimmo910.github.io/edt-plugin-pack"
+          {
+            echo '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">'
+            echo '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            echo '<title>EDT Plugin Pack — update site</title>'
+            echo '<style>body{font:16px/1.5 system-ui,sans-serif;max-width:44rem;margin:3rem auto;padding:0 1rem;color:#222}code{background:#f2f2f2;padding:.15rem .4rem;border-radius:4px}h1{font-size:1.5rem}footer{margin-top:2rem;color:#777;font-size:.9rem}</style></head><body>'
+            echo '<h1>EDT Plugin Pack — p2 update site</h1>'
+            echo '<p>Открытый набор сторонних плагинов 1C:EDT. В EDT: <b>Помощь → Установить новое ПО → Добавить</b> и вставьте URL своей версии EDT:</p><ul>'
+            for line in $lines; do
+              echo "<li>EDT $line: <code>$BASE/$line/</code></li>"
+            done
+            echo '</ul><p>Отметьте категорию «Набор плагинов 1C:EDT» (EDT MCP — отдельная категория, лицензия AGPL-3.0).</p>'
+            echo '<p>Офлайн-установка zip-архивом и состав набора — в <a href="https://github.com/Jimmo910/edt-plugin-pack">репозитории</a> и <a href="https://github.com/Jimmo910/edt-plugin-pack/releases">Releases</a>.</p>'
+            echo "<footer>Версия набора: $ver · обновлено $(date -u +%Y-%m-%d) · публикуются только прошедшие verify на реальной EDT сборки</footer>"
+            echo '</body></html>'
+          } > site/index.html
+          echo "### Update site" >> "$GITHUB_STEP_SUMMARY"
+          for line in $lines; do
+            echo "- $BASE/$line/ (v$ver)" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
