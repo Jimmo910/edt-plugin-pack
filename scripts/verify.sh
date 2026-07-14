@@ -41,10 +41,14 @@ echo ">> director rc=$dir_rc"
 # Гейт по факту: все ли запрошенные IU реально стали installed roots?
 roots="$("$SANDBOX/1cedt" -application org.eclipse.equinox.p2.director -noSplash -consoleLog \
   -listInstalledRoots 2>/dev/null || true)"
+echo ">> roots: $(printf '%s' "$roots" | wc -c) байт"
+# ВАЖНО: не проверять через `printf | grep -q` — при pipefail и roots больше pipe-буфера
+# ранний выход grep даёт printf EPIPE, конвейер «падает» и УСТАНОВЛЕННАЯ фича ложно
+# считается отсутствующей. Bash-подстрока — без конвейера, без гонки.
 missing=()
 IFS=',' read -ra arr <<< "$IUS"
 for iu in "${arr[@]}"; do
-  printf '%s\n' "$roots" | grep -qF "$iu" || missing+=("$iu")
+  [[ "$roots" == *"$iu"* ]] || missing+=("$iu")
 done
 
 rm -rf "$SANDBOX"
