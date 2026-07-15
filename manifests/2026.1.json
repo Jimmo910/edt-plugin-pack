@@ -2,7 +2,7 @@
   "package": {
     "name": "EDT-Plugin-Pack",
     "edtLine": "2026.1",
-    "version": "1.0.6"
+    "version": "1.1.0"
   },
   "edtHome": "C:\\Program Files\\1C\\1CE\\components\\1c-edt-2025.2.6+4-x86_64",
   "jdkGlob": "C:\\Program Files\\1C\\1CE\\components\\axiom-jdk-full-*",
@@ -166,6 +166,24 @@
       "source": {
         "type": "zip",
         "url": "https://github.com/marmyshev/indent-guide/releases/download/v2.2.5/repo.zip"
+      }
+    },
+    {
+      "id": "edt-fast-button",
+      "name": "EDT Fast Button",
+      "version": "0.1.5",
+      "license": "EPL-2.0",
+      "category": "main",
+      "featureId": "ru.jimmo.edt.fastbutton.feature",
+      "repoUrl": "https://github.com/Jimmo910/edt-fast-button",
+      "update": {
+        "kind": "gh-release",
+        "repo": "Jimmo910/edt-fast-button",
+        "asset": "^edt-fast-button-.*\\.zip$"
+      },
+      "source": {
+        "type": "zip",
+        "url": "https://github.com/Jimmo910/edt-fast-button/releases/download/v0.1.5/edt-fast-button-0.1.5.zip"
       }
     }
   ]
