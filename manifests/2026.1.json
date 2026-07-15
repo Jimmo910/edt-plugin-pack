@@ -111,7 +111,7 @@
     {
       "id": "edt-mcp",
       "name": "EDT MCP Server",
-      "version": "2.6.1",
+      "version": "2.7.1",
       "license": "AGPL-3.0",
       "category": "mcp",
       "featureId": "com.ditrix.edt.mcp.server.feature",
@@ -123,7 +123,7 @@
       },
       "source": {
         "type": "zip",
-        "url": "https://github.com/DitriXNew/EDT-MCP/releases/download/v2.6.1/MCP-EDT.v2.6.1.zip"
+        "url": "https://github.com/DitriXNew/EDT-MCP/releases/download/v2.7.1/MCP-EDT.v2.7.1.zip"
       }
     },
     {

@@ -7,6 +7,10 @@ on:
         description: "Создать GitHub Release (после успешного verify)"
         type: boolean
         default: false
+      notes_prefix:
+        description: "Врезка сверху описания релиза (напр. про новый плагин)"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -93,12 +97,13 @@ jobs:
       - name: Создать единый релиз с двумя архивами
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTES_PREFIX: ${{ inputs.notes_prefix }}
         run: |
           set -euo pipefail
           VER=$(jq -r .package.version manifests/2025.2.json)
           TAG="v$VER"
           ZIPS=$(ls artifacts/*.zip)
-          NOTES=$(bash scripts/release-notes.sh "$VER")
+          NOTES=$(bash scripts/release-notes.sh "$VER" "$NOTES_PREFIX")
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" $ZIPS --clobber
             gh release edit "$TAG" --title "$TAG" --notes "$NOTES"
