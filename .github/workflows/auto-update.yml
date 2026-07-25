@@ -164,16 +164,45 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-pages.yml
 
-  # 6) Если что-то упало (напр. verify зарубил несовместимый бамп) — issue.
+  # 6) Если что-то упало ИЛИ было отменено — issue.
+  #    failure() ложен, когда прогон ОТМЕНЁН: так бывает, если verify сутки ждёт
+  #    мёртвого self-hosted runner'а и GitHub убивает job по 24ч-таймауту очереди.
+  #    Раньше issue в этом случае не заводился и поломка жила незамеченной
+  #    (прогон 29729125446 от 2026-07-20: verify cancelled, on-failure skipped).
+  #    always() + разбор needs.*.result ловит оба исхода.
   on-failure:
     needs: [bump, build, verify, commit-release, publish-pages]
-    if: failure()
+    if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Open issue
         env:
           GH_TOKEN: ${{ github.token }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "Авто-обновление не прошло ($(date -u +%Y-%m-%d))" \
-            --body "Прогон авто-обновления завершился с ошибкой (возможно, новая версия плагина не ставится на EDT — verify зарубил релиз). Лог: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
+          set -euo pipefail
+          LOG="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          DAY=$(date -u +%Y-%m-%d)
+          if [ "$VERIFY_RESULT" = "cancelled" ]; then
+            TITLE="Авто-обновление зависло: verify не дождался runner'а ($DAY)"
+            BODY=$(printf '%s\n' \
+              "Job \`verify\` отменён — почти наверняка self-hosted runner с меткой \`edt\` был offline," \
+              "и job простоял в очереди до 24-часового таймаута GitHub. Релиза не было." \
+              "" \
+              "Что проверить:" \
+              "1. Статус runner'а: \`gh api repos/$GITHUB_REPOSITORY/actions/runners\`" \
+              "2. Если offline — на LXC 107 поднять службу:" \
+              "   \`cd /opt/actions-runner && ./svc.sh start\`, лог — \`journalctl -u actions.runner.* -n 50\`" \
+              "3. Если сервер переезжал — сначала погасить службу на старом хосте, иначе runner" \
+              "   получит SessionConflictException (см. историю: служба умирала насмерть)." \
+              "" \
+              "Лог прогона: $LOG")
+          else
+            TITLE="Авто-обновление не прошло ($DAY)"
+            BODY=$(printf '%s\n' \
+              "Прогон авто-обновления завершился с ошибкой (возможно, новая версия плагина" \
+              "не ставится на EDT — verify зарубил релиз)." \
+              "" \
+              "Лог прогона: $LOG")
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" || true
