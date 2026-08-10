@@ -13,14 +13,14 @@
 
 | Плагин | Версия | Лицензия | Что делает |
 |--------|--------|----------|------------|
-| [EDT Extension Tweaks](https://github.com/Xelgo/edt-extension-tweaks) | 1.1.21 | EPL-2.0 | общий BSL-контекст, конструктор запросов, цепочки обновления |
+| [EDT Extension Tweaks](https://github.com/Xelgo/edt-extension-tweaks) | 1.1.22 | EPL-2.0 | общий BSL-контекст, конструктор запросов, цепочки обновления |
 | [Disable Editing Plugin](https://gitlab.com/marmyshev/edt-editing) | 0.6.0 | EPL-2.0 | объекты «только для чтения» по правилам |
 | [EDT Test Runner](https://github.com/bia-technologies/edt-test-runner) | 25.01 | Apache-2.0 | запуск/отладка юнит-тестов (YAXUnit) |
 | [Configuration Repository (PluginEDT)](https://github.com/ZigRinat85/PluginEDT) | 0.4.0 | EPL-2.0 | работа с хранилищем конфигурации 1С |
 | [AnyEdit Tools](https://github.com/iloveeclipse/anyedittools) | 2.7.3 | EPL-2.0 | сравнение, буфер обмена, автоформат |
 | [IndentGuide](https://github.com/marmyshev/indent-guide) | 2.2.5 | MIT | направляющие отступов в редакторе |
 | [EDT Fast Button](https://github.com/Jimmo910/edt-fast-button) | 0.1.5 | EPL-2.0 | быстрые кнопки безопасных Git-операций |
-| [EDT MCP Server](https://github.com/DitriXNew/EDT-MCP) | 2.9.1 | **AGPL-3.0** | MCP-сервер для AI-ассистентов _(отдельная категория)_ |
+| [EDT MCP Server](https://github.com/DitriXNew/EDT-MCP) | 2.10.1 | **AGPL-3.0** | MCP-сервер для AI-ассистентов _(отдельная категория)_ |
 | [YAXUnit](https://github.com/bia-technologies/yaxunit) | 25.12 | Apache-2.0 | движок тестов — расширение 1С `.cfe` (не плагин EDT, ставится в ИБ) |
 
 Составы под 2025.2 и 2026.1 сейчас идентичны.
