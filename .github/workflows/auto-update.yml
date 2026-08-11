@@ -86,8 +86,15 @@ jobs:
             cp "$d/manifest.json" "manifests/$line.json"
             SUM="$SUM $line: $(cat "$d/summary.txt");"
           done
-          VER=$(pwsh -NoProfile -File scripts/sync-version.ps1)
+          pwsh -NoProfile -File scripts/sync-version.ps1 >sv.out 2>sv.err || { cat sv.err; exit 1; }
+          VER=$(cat sv.out); cat sv.err
           if [ -n "$SUM" ]; then CH=true; else CH=false; fi
+          # Выравнивание версий живёт только в артефакте. Если бампов нет, commit-release не
+          # запустится, и расхождение останется в репозитории — вылезет потом падением
+          # sync-version.ps1 -Check в build-release. Поэтому делаем его заметным сразу.
+          if grep -q 'версия ->' sv.err && [ "$CH" != "true" ]; then
+            echo "::warning::манифесты разъехались по package.version и выровнены только в артефакте — в репозитории расхождение осталось, поправьте вручную"
+          fi
           {
             echo "changed=$CH"
             echo "version=$VER"
