@@ -101,10 +101,13 @@ jobs:
           fi
           # summary — недоверенные данные (собран из tag_name чужих репозиториев), поэтому
           # многострочной формой с делимитером: перевод строки в `key=value` подменил бы outputs.
+          # Делимитер уникальный: с фиксированным значение, содержащее эту же строку, закрыло бы
+          # блок досрочно и подменило соседние outputs (например version=, который станет тегом).
+          D="EOF_SUMMARY_${GITHUB_RUN_ID}_${RANDOM}"
           {
             echo "changed=$CH"
             echo "version=$VER"
-            printf 'summary<<EOF_SUMMARY\n%s\nEOF_SUMMARY\n' "$SUM"
+            printf 'summary<<%s\n%s\n%s\n' "$D" "$SUM" "$D"
           } >> "$GITHUB_OUTPUT"
           echo "версия набора: $VER; изменения:${SUM:- нет}"
       - uses: actions/upload-artifact@v4
@@ -143,12 +146,20 @@ jobs:
           Invoke-WebRequest -Uri $env:ECLIPSE_URL -OutFile "$env:RUNNER_TEMP\eclipse.zip" -UseBasicParsing
           Expand-Archive "$env:RUNNER_TEMP\eclipse.zip" "$env:RUNNER_TEMP\ecl" -Force
           "ECLIPSE_HOME=$(Join-Path "$env:RUNNER_TEMP\ecl" 'eclipse')" >> $env:GITHUB_ENV
-      - name: Build
+      # Отдельными шагами по той же причине, что и гейты в build-release.yml: в одном блоке
+      # код возврата упавшего скрипта может быть перезатёрт следующей командой. Здесь сегодня
+      # спасал бы стиль (build/ci-validate сигналят throw, а не exit), но инвариант хрупкий.
+      - name: Собрать набор (${{ matrix.target }})
         shell: pwsh
-        run: |
-          .\scripts\build.ps1 -Target ${{ matrix.target }}
-          .\scripts\ci-validate.ps1
-          Copy-Item build\ius.txt build\dist\
+        run: .\scripts\build.ps1 -Target ${{ matrix.target }}
+      - name: Валидация p2-метаданных
+        shell: pwsh
+        env:
+          MANIFEST: manifests/${{ matrix.target }}.json
+        run: .\scripts\ci-validate.ps1
+      - name: Подготовить артефакт
+        shell: pwsh
+        run: Copy-Item build\ius.txt build\dist\
       - uses: actions/upload-artifact@v4
         with:
           name: pack-${{ matrix.target }}
@@ -268,6 +279,10 @@ jobs:
       - name: Open issue
         env:
           GH_TOKEN: ${{ github.token }}
+          # GH_REPO обязателен: в этом job'е нет checkout, git-remote отсутствует, а
+          # GITHUB_REPOSITORY сам gh не читает — без него любая команда gh без --repo
+          # падает с «could not determine base repo».
+          GH_REPO:  ${{ github.repository }}
           R_BUMP:    ${{ needs.bump.result }}
           R_SYNC:    ${{ needs.sync.result }}
           R_BUILD:   ${{ needs.build.result }}
@@ -286,8 +301,11 @@ jobs:
           if [ "$R_VERIFY" = "cancelled" ]; then
             TITLE="Авто-обновление зависло: verify не дождался runner'а"
             BODY=$(printf '%s\n' \
-              "Job \`verify\` отменён — почти наверняка self-hosted runner с меткой \`edt\` был offline," \
-              "и job простоял в очереди до 24-часового таймаута GitHub. Релиза не было." \
+              "Состояние job'ов:$BAD" \
+              "" \
+              "Job \`verify\` отменён. Обычная причина — self-hosted runner с меткой \`edt\` был offline," \
+              "и job простоял в очереди до 24-часового таймаута GitHub (если прогон отменили руками," \
+              "issue можно закрыть). Релиза не было." \
               "" \
               "Что проверить:" \
               "1. Статус runner'а: \`gh api repos/$GITHUB_REPOSITORY/actions/runners\`" \
@@ -296,7 +314,9 @@ jobs:
               "3. Если сервер переезжал — сначала погасить службу на старом хосте, иначе runner" \
               "   получит SessionConflictException (см. историю: служба умирала насмерть).")
           else
-            TITLE="Авто-обновление не прошло:$BAD"
+            # Заголовок фиксированный (без даты и без списка job'ов): иначе каждая новая
+            # комбинация отказов создавала бы отдельный issue и дедупликация не работала бы.
+            TITLE="Авто-обновление не прошло"
             BODY=$(printf '%s\n' \
               "Упавшие job'ы:$BAD" \
               "" \
@@ -322,7 +342,7 @@ jobs:
           NUM=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 50 --json number,title \
                   --jq "map(select(.title==\"$TITLE\")) | .[0].number // empty" || true)
           if [ -n "$NUM" ]; then
-            gh issue comment "$NUM" --body "Повторилось: $LOG" || true
+            gh issue comment "$NUM" --repo "$GITHUB_REPOSITORY" --body "Повторилось:$BAD — $LOG"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" || true
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
           fi

@@ -38,6 +38,27 @@ function Get-GhLatest($repo) {
   if (-not $j -or -not $j.tag_name) { throw "не удалось получить релизы $repo (нужен gh/GH_TOKEN)" }
   return $j
 }
+# Нормализация версии для СРАВНЕНИЯ (не для записи): обрезаем суффиксы (-rc1, +2) и добиваем
+# до трёх компонент. Без добивки [version]'1.2' -lt [version]'1.2.0' истинно (Build = -1), и
+# апстрим, выпустивший «0.7» вместо «0.7.0», ложно выглядел бы откатом.
+function ConvertTo-CmpVersion([string]$s) {
+  if (-not $s) { return $null }
+  $t = ($s -split '[^0-9.]')[0].Trim('.')
+  if (-not $t) { return $null }
+  $p = @($t -split '\.' | Where-Object { $_ -ne '' })
+  if (-not $p.Count) { return $null }
+  while ($p.Count -lt 3) { $p += '0' }
+  try { [version]($p[0..2] -join '.') } catch { $null }
+}
+# Пропажа релиза не должна молча откатывать набор назад. Раньше защита стояла только на
+# gitlab-package, а 7 из 8 источников — gh-release/gh-jars: там перетегирование апстрима или
+# хотфикс к старой ветке (у PluginEDT все релизы pre-release, берётся самый свежий ПО ДАТЕ,
+# а не по версии) откатывал бы версию и ссылку без единого предупреждения.
+function Assert-NotDowngrade([string]$id, [string]$old, [string]$new, [string]$where) {
+  $o = ConvertTo-CmpVersion $old
+  $n = ConvertTo-CmpVersion $new
+  if ($o -and $n -and $n -lt $o) { throw "$id : в $where максимальная версия $new младше текущей $old — похоже на пропажу релиза, а не на обновление" }
+}
 function Asset-Url($rel, $pattern) {
   $a = $rel.assets | Where-Object { $_.name -match $pattern } | Select-Object -First 1
   if (-not $a) { throw "ассет по шаблону '$pattern' не найден в релизе $($rel.tag_name)" }
@@ -74,6 +95,7 @@ foreach ($p in $m.plugins) {
         $rel = Get-GhLatest $p.update.repo; $nv = $rel.tag_name -replace '^v',''
         if (-not $nv) { throw "пустая версия в релизе $($p.update.repo)" }
         if ($nv -ne $p.version) {
+          Assert-NotDowngrade $p.id $p.version $nv "релизах $($p.update.repo)"
           $url = Asset-Url $rel $p.update.asset
           $changes += "$($p.id): $($p.version) -> $nv"
           if (-not $DryRun) { $p.version = $nv; $p.source.url = $url }
@@ -83,6 +105,7 @@ foreach ($p in $m.plugins) {
         $rel = Get-GhLatest $p.update.repo; $nv = $rel.tag_name -replace '^v',''
         if (-not $nv) { throw "пустая версия в релизе $($p.update.repo)" }
         if ($nv -ne $p.version) {
+          Assert-NotDowngrade $p.id $p.version $nv "релизах $($p.update.repo)"
           $feat = Asset-Url $rel $p.update.featureAsset
           $plug = Asset-Url $rel $p.update.pluginAsset
           $changes += "$($p.id): $($p.version) -> $nv"
@@ -92,17 +115,18 @@ foreach ($p in $m.plugins) {
       'gitlab-package' {
         $proj = [uri]::EscapeDataString($p.update.project)
         $pkgs = Invoke-RestMethod "https://gitlab.com/api/v4/projects/$proj/packages?per_page=100"
-        $cand = $pkgs | Where-Object { $_.name -eq $p.update.package } | Sort-Object { try { [version]$_.version } catch { [version]'0.0' } } -Descending | Select-Object -First 1
+        # Сортируем той же нормализацией, что и сравниваем: со старым `try { [version] }` версии
+        # вида 2026.1.2+2 или 1.0.0-rc1 схлопывались в 0.0, сортировка вырождалась, и «самым
+        # свежим» оказывался произвольный элемент в порядке ответа API.
+        $cand = $pkgs | Where-Object { $_.name -eq $p.update.package } |
+                Sort-Object { $v = ConvertTo-CmpVersion $_.version; if ($v) { $v } else { [version]'0.0.0' } } -Descending |
+                Select-Object -First 1
         # Пустой результат — это ОТКАЗ, а не «обновлений нет»: проект переименован, пакет удалён,
         # ушли за 100 записей, поменялся формат ответа. Раньше такой случай не попадал ни в
         # $changes, ни в $failed, и прогон был зелёным и молчаливым.
         if (-not $cand) { throw "в проекте $($p.update.project) не найден пакет '$($p.update.package)'" }
         if ($cand.version -ne $p.version) {
-          # Защита от отката: если в реестре осталась только версия СТАРШЕ нашей, это не апдейт,
-          # а пропажа релиза — молча откатывать набор назад нельзя.
-          $old = try { [version]$p.version } catch { $null }
-          $new = try { [version]$cand.version } catch { $null }
-          if ($old -and $new -and $new -lt $old) { throw "в $($p.update.project) максимальная версия $($cand.version) младше текущей $($p.version) — похоже на пропажу релиза" }
+          Assert-NotDowngrade $p.id $p.version $cand.version "пакетах $($p.update.project)"
           $changes += "$($p.id): $($p.version) -> $($cand.version)"
           if (-not $DryRun) { $p.version = $cand.version; $p.source.packageVersion = $cand.version }
         }
@@ -139,6 +163,8 @@ if ($env:GITHUB_OUTPUT) {
   # outputs (например version=). Тот же класс, что уже закрыт для `run:` через env:.
   $d = 'EOF_' + [guid]::NewGuid().ToString('N')
   "changed=true"  | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
-  "summary<<$d`n$($changes -join '; ')`n$d" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+  # Пишем строго с LF: Out-File на Windows добавил бы CRLF, и закрывающая строка делимитера
+  # приехала бы как "EOF_xxx\r" — раннер ответил бы «matching delimiter not found».
+  [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "summary<<$d`n$($changes -join '; ')`n$d`n", [Text.UTF8Encoding]::new($false))
   "version=$($m.package.version)"  | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
 }

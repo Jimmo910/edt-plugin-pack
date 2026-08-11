@@ -49,9 +49,14 @@ for cand in /opt/1C/1CE/components/axiom-jdk-full-*/bin/java /usr/lib/jvm/*/bin/
   # Кандидат может быть нерабочим (битый пакет, чужая архитектура): под set -e + pipefail
   # присваивание из падающего конвейера убило бы скрипт молча, до проверки ниже.
   vout=$("$cand" -version 2>&1) || continue
-  vout=${vout%%$'\n'*}                      # только первая строка: ниже могут быть чужие «version»
-  [[ $vout =~ version\ \"([0-9]+) ]] || continue
-  v="${BASH_REMATCH[1]}"
+  # Берём ПЕРВУЮ подходящую строку, а не первую строку вывода: JVM может напечатать раньше
+  # «Picked up JAVA_TOOL_OPTIONS: …» или предупреждение — тогда привязка к первой строке
+  # отвергла бы вообще всех кандидатов и обрушила verify обеих линий.
+  v=""
+  while IFS= read -r line; do
+    if [[ $line =~ version\ \"([0-9]+) ]]; then v="${BASH_REMATCH[1]}"; break; fi
+  done <<< "$vout"
+  [ -n "$v" ] || continue
   [ "$v" -ge "$req" ] 2>/dev/null || continue
   [ -n "$JAVA_BIN" ] || { JAVA_BIN="$cand"; JAVA_VER="$v"; }          # первая подходящая — запасной вариант
   [ "$v" = "$req" ] && { JAVA_BIN="$cand"; JAVA_VER="$v"; break; }    # точное совпадение лучше
