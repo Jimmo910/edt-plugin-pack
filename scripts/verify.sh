@@ -31,20 +31,39 @@ SANDBOX="${VERIFY_SANDBOX:-/tmp/edt-verify-sandbox}"
 # EDT 2026.2 требует 25 — совпадение кончилось: «Provided Java does not match the required
 # version 25: /bin/java», director rc=1 и все фичи «не установились».
 # JAVA_HOME лаунчер игнорирует (проверено), PATH работает, но -vm не зависит от окружения.
+#
+# requiredJavaVersion — МИНИМУМ, а не точное совпадение: EDT 2026.1 (требует 17) штатно
+# стартует на JDK 25 (проверено на раннере). Поэтому берём любую JVM не ниже требуемой,
+# предпочитая точное совпадение. Строгое равенство сажало бы verify линии 2026.1 на один
+# лишь системный пакет openjdk-17: установка 2026.2 подняла общий axiom-jdk-компонент до 25,
+# и 17-го в составе EDT больше нет — снос пакета ронял бы verify обеих линий разом.
 req=$(sed -n 's/.*-Dosgi\.requiredJavaVersion=\([0-9][0-9]*\).*/\1/p' "$EDT_HOME/1cedt.ini" | head -1)
 [ -n "$req" ] || { echo "не удалось прочитать requiredJavaVersion из $EDT_HOME/1cedt.ini"; exit 1; }
-JAVA_BIN=""
-for cand in /opt/1C/1CE/components/axiom-jdk-full-"$req".*/bin/java /usr/lib/jvm/*"$req"*/bin/java "$(command -v java || true)"; do
+JAVA_BIN=""; JAVA_VER=""
+for cand in /opt/1C/1CE/components/axiom-jdk-full-*/bin/java /usr/lib/jvm/*/bin/java "$(command -v java || true)"; do
   [ -x "$cand" ] || continue
   v=$("$cand" -version 2>&1 | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p')
-  [ "$v" = "$req" ] && { JAVA_BIN="$cand"; break; }
+  [ -n "$v" ] || continue
+  [ "$v" -ge "$req" ] 2>/dev/null || continue
+  [ -n "$JAVA_BIN" ] || { JAVA_BIN="$cand"; JAVA_VER="$v"; }          # первая подходящая — запасной вариант
+  [ "$v" = "$req" ] && { JAVA_BIN="$cand"; JAVA_VER="$v"; break; }    # точное совпадение лучше
 done
-[ -n "$JAVA_BIN" ] || { echo "не найдена Java $req, нужная для $EDT_HOME (искали axiom-jdk-компоненты, /usr/lib/jvm, PATH)"; exit 1; }
+[ -n "$JAVA_BIN" ] || { echo "не найдена Java >= $req, нужная для $EDT_HOME (искали axiom-jdk-компоненты, /usr/lib/jvm, PATH)"; exit 1; }
 
 echo ">> verify: EDT_HOME=$EDT_HOME"
 echo ">> repo   =$REPO"
 echo ">> IUs    =$IUS"
-echo ">> java   =$JAVA_BIN (EDT требует $req)"
+echo ">> java   =$JAVA_BIN (Java $JAVA_VER, EDT требует >= $req)"
+
+# Песочница — копия EDT почти на 7 ГБ, и её имя уникально на прогон (VERIFY_SANDBOX с RUN_ID).
+# Поэтому оборванный job (отмена, 24ч-таймаут очереди, ошибка cp) раньше оставлял её навсегда:
+# несколько обрывов забили бы диск раннера, и умирали бы уже все прогоны. Чистим через trap,
+# а заодно подметаем брошенные песочницы прошлых прогонов старше суток.
+cleanup() { rm -rf "$SANDBOX"; }
+trap cleanup EXIT INT TERM
+case "$SANDBOX" in
+  /tmp/*) find /tmp -maxdepth 1 -type d -name 'verify-*' -mtime +0 -exec rm -rf {} + 2>/dev/null || true ;;
+esac
 
 # Ставим в изолированную копию EDT, чтобы не портить эталонную установку.
 rm -rf "$SANDBOX"
@@ -70,7 +89,7 @@ for iu in "${arr[@]}"; do
   [[ "$roots" == *"$iu"* ]] || missing+=("$iu")
 done
 
-rm -rf "$SANDBOX"
+# песочницу удалит trap — в том числе если мы выйдем по ошибке ниже
 
 if [ "${#missing[@]}" -ne 0 ]; then
   echo "VERIFY FAILED ($EDT_HOME): не установились — ${missing[*]}"

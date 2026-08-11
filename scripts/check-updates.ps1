@@ -7,6 +7,11 @@ param([switch]$DryRun)
 $manifestPath = $ManifestPath
 $m = Get-Content $manifestPath -Raw | ConvertFrom-Json
 $changes = @()
+# Считаем проверенное и упавшее: ошибка по одному плагину не должна валить прогон, но если
+# НЕ ОТВЕТИЛ НИ ОДИН источник (сеть, лимит GitHub API, протухший токен), результат «обновлений
+# нет» — ложь. Раньше такой прогон был зелёным и молчал, и набор тихо переставал обновляться.
+$checked = 0
+$failed  = @()
 
 function Get-GhLatest($repo) {
   $j = gh api "repos/$repo/releases/latest" 2>$null | ConvertFrom-Json
@@ -26,6 +31,7 @@ function Asset-Url($rel, $pattern) {
 }
 
 if ($m.yaxunit.update) {
+  $checked++
   try {
     $rel = Get-GhLatest $m.yaxunit.update.repo
     $nv = $rel.tag_name -replace '^v',''
@@ -36,12 +42,13 @@ if ($m.yaxunit.update) {
         $m.yaxunit.assets = @($rel.assets | Where-Object { $_.name -match $m.yaxunit.update.asset } | ForEach-Object { $_.browser_download_url })
       }
     }
-  } catch { Write-Warning "YAXUnit: пропуск проверки — $($_.Exception.Message)" }
+  } catch { Write-Warning "YAXUnit: пропуск проверки — $($_.Exception.Message)"; $failed += 'YAXUnit' }
 }
 
 foreach ($p in $m.plugins) {
   if (-not $p.update) { continue }
   if ($p.update.hold) { Write-Host "  $($p.id): hold (пин зафиксирован) — пропуск"; continue }
+  $checked++
   try {
     switch ($p.update.kind) {
       'gh-release' {
@@ -60,7 +67,12 @@ foreach ($p in $m.plugins) {
       }
       default { throw "неизвестный update.kind '$($p.update.kind)'" }
     }
-  } catch { Write-Warning "$($p.id): пропуск обновления — $($_.Exception.Message)" }
+  } catch { Write-Warning "$($p.id): пропуск обновления — $($_.Exception.Message)"; $failed += $p.id }
+}
+
+if ($failed.Count) { Write-Warning ("Не удалось проверить $($failed.Count) из $checked источников: " + ($failed -join ', ')) }
+if ($checked -gt 0 -and $failed.Count -eq $checked) {
+  throw "ни один из $checked источников обновлений не ответил — считать «обновлений нет» нельзя (сеть/лимит API/токен)"
 }
 
 if ($changes.Count -eq 0) {

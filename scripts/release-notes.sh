@@ -7,7 +7,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 VER="$1"; EXTRA="${2:-}"
 
-mapfile -t MANIFESTS < <(ls manifests/*.json | sort)
+MANIFESTS=()   # инициализация обязательна: при пустом manifests/ mapfile переменную не создаст,
+               # и под set -u проверка ниже упала бы с «unbound variable» вместо внятного сообщения
+mapfile -t MANIFESTS < <(ls manifests/*.json 2>/dev/null | sort)
 [ "${#MANIFESTS[@]}" -gt 0 ] || { echo "манифесты не найдены" >&2; exit 1; }
 
 comp() {  # $1 = путь к манифесту

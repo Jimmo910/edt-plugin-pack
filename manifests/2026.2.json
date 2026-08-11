@@ -42,7 +42,7 @@
       "update": {
         "kind": "gh-release",
         "repo": "Xelgo/edt-extension-tweaks",
-        "asset": "edt-extension-tweaks-update-site.*\\.zip"
+        "asset": "^edt-extension-tweaks-update-site.*\\.zip$"
       },
       "source": {
         "type": "zip",
@@ -82,7 +82,7 @@
       "update": {
         "kind": "gh-release",
         "repo": "bia-technologies/edt-test-runner",
-        "asset": "edt-test-runner\\..*\\.zip"
+        "asset": "^edt-test-runner\\..*\\.zip$"
       },
       "source": {
         "type": "zip",
@@ -100,7 +100,7 @@
       "update": {
         "kind": "gh-release",
         "repo": "ZigRinat85/PluginEDT",
-        "asset": "build\\.zip"
+        "asset": "^build\\.zip$"
       },
       "source": {
         "type": "zip",
@@ -118,7 +118,7 @@
       "update": {
         "kind": "gh-release",
         "repo": "DitriXNew/EDT-MCP",
-        "asset": "MCP-EDT\\.v.*\\.zip"
+        "asset": "^MCP-EDT\\.v.*\\.zip$"
       },
       "source": {
         "type": "zip",
@@ -160,7 +160,7 @@
       "update": {
         "kind": "gh-release",
         "repo": "marmyshev/indent-guide",
-        "asset": "repo\\.zip"
+        "asset": "^repo\\.zip$"
       },
       "source": {
         "type": "zip",

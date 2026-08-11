@@ -28,14 +28,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MANIFEST: manifests/${{ matrix.target }}.json
         run: ./scripts/check-updates.ps1
+      # ВАЖНО: outputs шага подставляем через env, а НЕ через ${{ }} прямо в скрипт.
+      # summary строится из tag_name СТОРОННИХ репозиториев (check-updates.ps1), то есть это
+      # недоверенные данные: тег вида `v1.0"; curl … | sh; "` иначе исполнился бы в шаге,
+      # у которого есть GITHUB_TOKEN с правами contents/issues: write.
       - name: Собрать meta-артефакт
         shell: bash
+        env:
+          CHANGED: ${{ steps.chk.outputs.changed }}
+          VERSION: ${{ steps.chk.outputs.version }}
+          SUMMARY: ${{ steps.chk.outputs.summary }}
+          TARGET:  ${{ matrix.target }}
         run: |
           mkdir -p out
-          echo "${{ steps.chk.outputs.changed }}"  > out/changed.txt
-          echo "${{ steps.chk.outputs.version }}"  > out/version.txt
-          echo "${{ steps.chk.outputs.summary }}"  > out/summary.txt
-          cp "manifests/${{ matrix.target }}.json" out/manifest.json
+          printf '%s\n' "$CHANGED" > out/changed.txt
+          printf '%s\n' "$VERSION" > out/version.txt
+          printf '%s\n' "$SUMMARY" > out/summary.txt
+          cp "manifests/$TARGET.json" out/manifest.json
       - uses: actions/upload-artifact@v4
         with:
           name: meta-${{ matrix.target }}
@@ -63,6 +72,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Линий в артефактах должно быть ровно столько же, сколько манифестов: иначе матрица
+          # в этом workflow разошлась с manifests/ (или bump не отдал артефакт), и молчаливый
+          # результат был бы «обновлений нет» — зелёный прогон, который ничего не проверил.
+          n=$(find meta -mindepth 1 -maxdepth 1 -type d -name 'meta-*' | wc -l)
+          m=$(ls -1 manifests/*.json | wc -l)
+          [ "$n" -eq "$m" ] || { echo "линий в артефактах ($n) != манифестов ($m): матрица target разошлась с manifests/"; exit 1; }
           # Линии не захардкожены: разбираем всё, что положил bump (meta/meta-<линия>/).
           SUM=""
           for d in meta/meta-*/; do
@@ -182,9 +197,23 @@ jobs:
           git add manifests
           pwsh scripts/sync-readme.ps1   # привести версии в README к манифестам
           git add README.md
-          git commit -m "chore: авто-обновление —$SUM"
-          git push origin main
+          # Идемпотентность: если push уже прошёл, а следующий шаг упал (сеть/лимит) и job
+          # перезапустили, коммитить нечего — раньше git commit возвращал 1, set -e ронял job,
+          # заводился issue «не прошло», хотя бампы уже в main, а релиза всё ещё нет.
+          if git diff --cached --quiet; then
+            echo "нечего коммитить: main уже содержит эти бампы (повторный запуск job)"
+          else
+            git commit -m "chore: авто-обновление —$SUM"
+            git push origin main
+          fi
           TAG="v$VER"
+          # Матрица target и manifests/ — два разных источника правды о наборе линий. Если они
+          # разошлись (добавили манифест, забыли матрицу), релиз молча уехал бы без архива,
+          # но с его описанием в теле релиза.
+          for mf in manifests/*.json; do
+            line=$(jq -r .package.edtLine "$mf")
+            [ -f "artifacts/EDT-Plugin-Pack-$line-$VER.zip" ] || { echo "нет архива для линии $line: матрица target разошлась с manifests/"; exit 1; }
+          done
           ZIPS=$(ls artifacts/*.zip)
           NOTES=$(bash scripts/release-notes.sh "$VER" "Авто-обновление:$SUM")
           if gh release view "$TAG" >/dev/null 2>&1; then

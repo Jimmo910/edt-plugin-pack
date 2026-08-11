@@ -44,8 +44,13 @@ jobs:
       - name: Собрать набор (${{ matrix.target }})
         shell: pwsh
         run: .\scripts\build.ps1 -Target ${{ matrix.target }}
+      # MANIFEST задаём явно: build.ps1 выставляет его только внутри СВОЕГО процесса, а это
+      # отдельный шаг. Без этого ci-validate брал бы дефолтный манифест независимо от матрицы
+      # и упал бы с «Манифест не найден», как только линию по умолчанию снимут с поддержки.
       - name: Валидация p2-метаданных
         shell: pwsh
+        env:
+          MANIFEST: manifests/${{ matrix.target }}.json
         run: .\scripts\ci-validate.ps1
       - name: Подготовить артефакт (zip + ius.txt)
         shell: pwsh
@@ -104,6 +109,12 @@ jobs:
           # тег и имена архивов должны быть от одной версии набора.
           VER=$(pwsh -NoProfile -File scripts/sync-version.ps1 -Check)
           TAG="v$VER"
+          # Матрица target и manifests/ — два разных источника правды о наборе линий; при
+          # расхождении релиз уехал бы без архива, но с его описанием в теле.
+          for mf in manifests/*.json; do
+            line=$(jq -r .package.edtLine "$mf")
+            [ -f "artifacts/EDT-Plugin-Pack-$line-$VER.zip" ] || { echo "нет архива для линии $line: матрица target разошлась с manifests/"; exit 1; }
+          done
           ZIPS=$(ls artifacts/*.zip)
           NOTES=$(bash scripts/release-notes.sh "$VER" "$NOTES_PREFIX")
           if gh release view "$TAG" >/dev/null 2>&1; then
