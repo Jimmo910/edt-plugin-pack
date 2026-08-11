@@ -38,7 +38,9 @@ SANDBOX="${VERIFY_SANDBOX:-/tmp/edt-verify-sandbox}"
 # лишь системный пакет openjdk-17: установка 2026.2 подняла общий axiom-jdk-компонент до 25,
 # и 17-го в составе EDT больше нет — снос пакета ронял бы verify обеих линий разом.
 # Без конвейера с `head`: `set -o pipefail` + ранний выход читателя — известные грабли этого репо.
-req=$(sed -n 's/.*-Dosgi\.requiredJavaVersion=\([0-9][0-9]*\).*/\1/p' "$EDT_HOME/1cedt.ini")
+# `|| true`: без него sed на отсутствующем/нечитаемом ini валит скрипт под set -e ДО внятного
+# сообщения ниже.
+req=$(sed -n 's/.*-Dosgi\.requiredJavaVersion=\([0-9][0-9]*\).*/\1/p' "$EDT_HOME/1cedt.ini" 2>/dev/null || true)
 req=${req%%$'\n'*}
 [ -n "$req" ] || { echo "не удалось прочитать requiredJavaVersion из $EDT_HOME/1cedt.ini"; exit 1; }
 JAVA_BIN=""; JAVA_VER=""
@@ -47,6 +49,7 @@ for cand in /opt/1C/1CE/components/axiom-jdk-full-*/bin/java /usr/lib/jvm/*/bin/
   # Кандидат может быть нерабочим (битый пакет, чужая архитектура): под set -e + pipefail
   # присваивание из падающего конвейера убило бы скрипт молча, до проверки ниже.
   vout=$("$cand" -version 2>&1) || continue
+  vout=${vout%%$'\n'*}                      # только первая строка: ниже могут быть чужие «version»
   [[ $vout =~ version\ \"([0-9]+) ]] || continue
   v="${BASH_REMATCH[1]}"
   [ "$v" -ge "$req" ] 2>/dev/null || continue

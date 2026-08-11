@@ -99,10 +99,12 @@ jobs:
             echo "package.version в manifests/ разъехались, а обновлений нет — выравнивание не будет закоммичено. Поправьте версии в репозитории вручную."
             exit 1
           fi
+          # summary — недоверенные данные (собран из tag_name чужих репозиториев), поэтому
+          # многострочной формой с делимитером: перевод строки в `key=value` подменил бы outputs.
           {
             echo "changed=$CH"
             echo "version=$VER"
-            echo "summary=$SUM"
+            printf 'summary<<EOF_SUMMARY\n%s\nEOF_SUMMARY\n' "$SUM"
           } >> "$GITHUB_OUTPUT"
           echo "версия набора: $VER; изменения:${SUM:- нет}"
       - uses: actions/upload-artifact@v4
@@ -124,6 +126,12 @@ jobs:
         with:
           name: manifests
           path: manifests
+      # Тест на фикстурах гоняем и здесь: этот workflow еженедельно правит README через
+      # sync-readme.ps1, и регресс в нём иначе всплыл бы только при ручном build-release.
+      # Гейт `-Check` тут неприменим: манифесты уже забампаны, а README синхронизируется позже.
+      - name: Тест sync-readme
+        shell: pwsh
+        run: .\scripts\tests\sync-readme.tests.ps1
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -260,13 +268,23 @@ jobs:
       - name: Open issue
         env:
           GH_TOKEN: ${{ github.token }}
-          VERIFY_RESULT: ${{ needs.verify.result }}
+          R_BUMP:    ${{ needs.bump.result }}
+          R_SYNC:    ${{ needs.sync.result }}
+          R_BUILD:   ${{ needs.build.result }}
+          R_VERIFY:  ${{ needs.verify.result }}
+          R_COMMIT:  ${{ needs.commit-release.result }}
+          R_PAGES:   ${{ needs.publish-pages.result }}
         run: |
           set -euo pipefail
           LOG="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          DAY=$(date -u +%Y-%m-%d)
-          if [ "$VERIFY_RESULT" = "cancelled" ]; then
-            TITLE="Авто-обновление зависло: verify не дождался runner'а ($DAY)"
+          # Причину берём из результатов job'ов. Раньше текст был один на все случаи и отправлял
+          # читателя смотреть verify, даже когда упал bump или sync.
+          BAD=""
+          for j in "bump:$R_BUMP" "sync:$R_SYNC" "build:$R_BUILD" "verify:$R_VERIFY" "commit-release:$R_COMMIT" "publish-pages:$R_PAGES"; do
+            case "${j#*:}" in failure|cancelled) BAD="$BAD ${j%%:*}(${j#*:})";; esac
+          done
+          if [ "$R_VERIFY" = "cancelled" ]; then
+            TITLE="Авто-обновление зависло: verify не дождался runner'а"
             BODY=$(printf '%s\n' \
               "Job \`verify\` отменён — почти наверняка self-hosted runner с меткой \`edt\` был offline," \
               "и job простоял в очереди до 24-часового таймаута GitHub. Релиза не было." \
@@ -276,15 +294,35 @@ jobs:
               "2. Если offline — на LXC 107 поднять службу:" \
               "   \`cd /opt/actions-runner && ./svc.sh start\`, лог — \`journalctl -u actions.runner.* -n 50\`" \
               "3. Если сервер переезжал — сначала погасить службу на старом хосте, иначе runner" \
-              "   получит SessionConflictException (см. историю: служба умирала насмерть)." \
-              "" \
-              "Лог прогона: $LOG")
+              "   получит SessionConflictException (см. историю: служба умирала насмерть).")
           else
-            TITLE="Авто-обновление не прошло ($DAY)"
+            TITLE="Авто-обновление не прошло:$BAD"
             BODY=$(printf '%s\n' \
-              "Прогон авто-обновления завершился с ошибкой (возможно, новая версия плагина" \
-              "не ставится на EDT — verify зарубил релиз)." \
+              "Упавшие job'ы:$BAD" \
               "" \
-              "Лог прогона: $LOG")
+              "Где смотреть в зависимости от job'а:" \
+              "- \`bump\` — источник обновлений не ответил (лимит GitHub API, сеть, переименованный" \
+              "  репозиторий/ассет) либо пакет GitLab не найден. Проверка считается неполной и" \
+              "  сознательно валится: «обновлений нет» в такой ситуации недостоверно." \
+              "- \`sync\` — либо линии в артефактах разошлись с \`manifests/\`, либо \`package.version\`" \
+              "  в манифестах разъехались при отсутствии бампов (нужна ручная правка версий)." \
+              "- \`build\` — сборка/валидация p2 или упавший тест \`scripts/tests/\`." \
+              "- \`verify\` — набор не встал на реальную EDT (обычно несовместимая новая версия плагина)." \
+              "- \`commit-release\`/\`publish-pages\` — публикация; бампы могли уже уехать в main." \
+              "" \
+              "Перезапускать лучше «Re-run all jobs»: при повторе только упавших job'ов" \
+              "\`upload-artifact@v4\` упрётся в конфликт уже загруженного артефакта.")
           fi
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" || true
+          BODY="$BODY
+
+          Лог прогона: $LOG"
+          # Дедупликация: заголовок без даты, и если такой issue уже открыт — комментируем его,
+          # а не плодим новый. Иначе вечная поломка (мёртвый апстрим, разъехавшиеся версии)
+          # давала бы по issue каждый понедельник.
+          NUM=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 50 --json number,title \
+                  --jq "map(select(.title==\"$TITLE\")) | .[0].number // empty" || true)
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" --body "Повторилось: $LOG" || true
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" || true
+          fi

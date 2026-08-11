@@ -34,9 +34,11 @@ function Get-JavaFor([string]$edtHome) {
 
 $sandbox = Join-Path $Build 'edt-sandbox'
 if (Test-Path $sandbox) { Remove-Item -Recurse -Force $sandbox }
-Write-Host "Копирую EDT в песочницу (несколько ГБ, подождите)..." -ForegroundColor Yellow
-Copy-Item -Recurse -Force $EdtHome $sandbox
+# Копирование ВНУТРИ try: оно само может лечь на середине (несколько ГБ, кончилось место),
+# и тогда без finally на диске оставался бы недокопированный хвост.
 try {
+  Write-Host "Копирую EDT в песочницу (несколько ГБ, подождите)..." -ForegroundColor Yellow
+  Copy-Item -Recurse -Force $EdtHome $sandbox
 
 # профиль p2 целевой установки.
 # Каталог профиля называется '<id>.profile'; идентификатор профиля для director — это <id>
@@ -54,6 +56,12 @@ $zip  = Join-Path $Dist "$($pkg.name)-$($pkg.edtLine)-$($pkg.version).zip"
 if (Test-Path $zip) {
   $repoUri = 'jar:' + (To-FileUri $zip) + '!/'
   Write-Host "Источник: релизный архив $zip"
+  # Архив мог остаться от прошлой сборки: имя зависит только от линии и версии. Тогда verify
+  # бодро отрапортует про «релизный архив», проверив вчерашнее содержимое.
+  $iusFile = Join-Path $Build 'ius.txt'
+  if ((Test-Path $iusFile) -and ((Get-Item $zip).LastWriteTime -lt (Get-Item $iusFile).LastWriteTime)) {
+    Write-Warning "архив старше build/ius.txt — похоже, он от предыдущей сборки; перезапустите package.ps1"
+  }
 } else {
   $repoUri = To-FileUri $RepoOut
   Write-Host "Источник: staging-каталог $RepoOut (архив не собран — запустите package.ps1)" -ForegroundColor Yellow
@@ -82,5 +90,10 @@ Write-Host "VERIFY OK ($EdtHome): установлены все $($iuList.Count)
 finally {
   # Песочница — копия EDT на несколько ГБ. Без finally она оставалась на диске при любом
   # провале гейта (в Linux-варианте это закрыто trap'ом, здесь раньше не было).
-  if (Test-Path $sandbox) { Remove-Item -Recurse -Force $sandbox -ErrorAction SilentlyContinue }
+  # Молча ошибку удаления не глотаем: на Windows файлы копии легко оказываются занятыми,
+  # и тогда о нескольких ГБ мусора надо знать.
+  if (Test-Path $sandbox) {
+    try { Remove-Item -Recurse -Force $sandbox -ErrorAction Stop }
+    catch { Write-Warning "не удалось удалить песочницу $sandbox — удалите вручную: $($_.Exception.Message)" }
+  }
 }

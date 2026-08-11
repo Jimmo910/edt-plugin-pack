@@ -41,14 +41,19 @@ jobs:
           $eclHome = Join-Path "$env:RUNNER_TEMP\ecl" 'eclipse'
           if (-not (Get-ChildItem (Join-Path $eclHome 'plugins') -Filter 'org.eclipse.equinox.launcher_*.jar')) { throw "launcher не найден" }
           "ECLIPSE_HOME=$eclHome" >> $env:GITHUB_ENV
-      # Единственный тест репозитория и оба гейта согласованности раньше запускались только
-      # руками — то есть на практике не запускались вовсе.
-      - name: Тесты и гейты согласованности
+      # ВАЖНО: каждый гейт — ОТДЕЛЬНЫМ шагом. В одном блоке `exit N` из вызванного .ps1 завершает
+      # только сам скрипт, выполнение блока продолжается, а $LASTEXITCODE перезатирается следующей
+      # командой — код шага равен коду ПОСЛЕДНЕЙ. Проверено: падающий скрипт + успешный в одном
+      # блоке дают шаг с кодом 0, то есть гейт был бы декорацией.
+      - name: Тест sync-readme
         shell: pwsh
-        run: |
-          .\scripts\tests\sync-readme.tests.ps1
-          .\scripts\sync-version.ps1 -Check
-          .\scripts\sync-readme.ps1 -Check
+        run: .\scripts\tests\sync-readme.tests.ps1
+      - name: Гейт версий манифестов
+        shell: pwsh
+        run: .\scripts\sync-version.ps1 -Check
+      - name: Гейт README против манифестов
+        shell: pwsh
+        run: .\scripts\sync-readme.ps1 -Check
       - name: Собрать набор (${{ matrix.target }})
         shell: pwsh
         run: .\scripts\build.ps1 -Target ${{ matrix.target }}

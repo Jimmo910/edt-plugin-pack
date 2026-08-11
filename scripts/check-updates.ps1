@@ -93,20 +93,32 @@ foreach ($p in $m.plugins) {
         $proj = [uri]::EscapeDataString($p.update.project)
         $pkgs = Invoke-RestMethod "https://gitlab.com/api/v4/projects/$proj/packages?per_page=100"
         $cand = $pkgs | Where-Object { $_.name -eq $p.update.package } | Sort-Object { try { [version]$_.version } catch { [version]'0.0' } } -Descending | Select-Object -First 1
-        if ($cand -and $cand.version -ne $p.version) { $changes += "$($p.id): $($p.version) -> $($cand.version)"; if (-not $DryRun) { $p.version = $cand.version; $p.source.packageVersion = $cand.version } }
+        # Пустой результат — это ОТКАЗ, а не «обновлений нет»: проект переименован, пакет удалён,
+        # ушли за 100 записей, поменялся формат ответа. Раньше такой случай не попадал ни в
+        # $changes, ни в $failed, и прогон был зелёным и молчаливым.
+        if (-not $cand) { throw "в проекте $($p.update.project) не найден пакет '$($p.update.package)'" }
+        if ($cand.version -ne $p.version) {
+          # Защита от отката: если в реестре осталась только версия СТАРШЕ нашей, это не апдейт,
+          # а пропажа релиза — молча откатывать набор назад нельзя.
+          $old = try { [version]$p.version } catch { $null }
+          $new = try { [version]$cand.version } catch { $null }
+          if ($old -and $new -and $new -lt $old) { throw "в $($p.update.project) максимальная версия $($cand.version) младше текущей $($p.version) — похоже на пропажу релиза" }
+          $changes += "$($p.id): $($p.version) -> $($cand.version)"
+          if (-not $DryRun) { $p.version = $cand.version; $p.source.packageVersion = $cand.version }
+        }
       }
       default { throw "неизвестный update.kind '$($p.update.kind)'" }
     }
   } catch { Write-Warning "$($p.id): пропуск обновления — $($_.Exception.Message)"; $failed += $p.id }
 }
 
-if ($failed.Count) { Write-Warning ("Не удалось проверить $($failed.Count) из $checked источников: " + ($failed -join ', ')) }
-# «Обновлений нет» достоверно только если проверено ВСЁ. Прежнее условие (упали все источники)
-# ловило лишь тотальный отказ: при недоступности одного провайдера — скажем, GitHub API при живом
-# GitLab — прогон снова был бы зелёным и молчаливым. Если же что-то обновилось, идём дальше:
-# частичный отказ порядок присваиваний выше уже сделал безопасным.
-if ($failed.Count -and $changes.Count -eq 0) {
-  throw "проверка неполна: не ответили $($failed.Count) из $checked источников ($($failed -join ', ')) — «обновлений нет» недостоверно"
+# Любой неотвеченный источник валит проверку — независимо от того, обновилось ли что-то ещё.
+# Мягкий вариант (падать только когда изменений нет) оставлял немой сценарий: один апстрим
+# недоступен, другой обновился — прогон зелёный, релиз выходит, и никто не знает, что часть
+# плагинов не проверялась. Write-Warning в зелёном прогоне не даёт ни issue, ни письма.
+# Цена — пропуск недели обновлений при разовом сбое апстрима; она ниже, чем тихая неполнота.
+if ($failed.Count) {
+  throw "проверка неполна: не ответили $($failed.Count) из $checked источников ($($failed -join ', ')) — результату доверять нельзя"
 }
 
 if ($changes.Count -eq 0) {
@@ -122,7 +134,11 @@ $m.package.version = "$($v.Major).$($v.Minor).$($v.Build + 1)"
 $m | ConvertTo-Json -Depth 12 | Set-Content -Path $manifestPath -Encoding UTF8
 Write-Host "$manifestPath обновлён; версия пакета -> $($m.package.version)"
 if ($env:GITHUB_OUTPUT) {
+  # summary строится из tag_name сторонних репозиториев, поэтому пишем его многострочной формой
+  # с делимитером: перевод строки в однострочном `key=value` позволил бы подменить соседние
+  # outputs (например version=). Тот же класс, что уже закрыт для `run:` через env:.
+  $d = 'EOF_' + [guid]::NewGuid().ToString('N')
   "changed=true"  | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
-  "summary=$($changes -join '; ')" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+  "summary<<$d`n$($changes -join '; ')`n$d" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
   "version=$($m.package.version)"  | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
