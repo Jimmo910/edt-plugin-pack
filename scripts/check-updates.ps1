@@ -13,15 +13,29 @@ $changes = @()
 $checked = 0
 $failed  = @()
 
+# gh api при HTTP-ошибке печатает тело ошибки В STDOUT и выходит с кодом 1, исключения при этом
+# НЕТ даже при $ErrorActionPreference='Stop'. Раньше этот JSON разбирался как релиз: у объекта
+# {message,status} нет ни tag_name, ни draft, поэтому фильтр `-not $_.draft` его пропускал,
+# tag_name оказывался пустым, и пустая строка засчитывалась как НОВАЯ ВЕРСИЯ. Итог был бы
+# катастрофический и тихий: version="" в манифесте, assets=[], зелёный релиз без YAXUnit.
+# Поэтому: проверяем код возврата и требуем непустой tag_name.
+function Invoke-GhJson([string]$path) {
+  $out = gh api $path 2>$null
+  if ($LASTEXITCODE -ne 0) { throw "gh api $path -> код $LASTEXITCODE" }
+  if (-not $out) { throw "gh api $path вернул пустой ответ" }
+  return ($out | ConvertFrom-Json)
+}
 function Get-GhLatest($repo) {
-  $j = gh api "repos/$repo/releases/latest" 2>$null | ConvertFrom-Json
+  $j = $null
   # releases/latest исключает pre-release/draft -> 404 для репозиториев, где все релизы prerelease
-  # (напр. ZigRinat85/PluginEDT). Тогда берём самый свежий не-draft из полного списка.
+  # (напр. ZigRinat85/PluginEDT). Это ОЖИДАЕМЫЙ отказ, поэтому глушим его и идём в fallback.
+  try { $j = Invoke-GhJson "repos/$repo/releases/latest" } catch { $j = $null }
   if (-not $j -or -not $j.tag_name) {
-    $all = gh api "repos/$repo/releases?per_page=100" 2>$null | ConvertFrom-Json
-    $j = $all | Where-Object { -not $_.draft } | Select-Object -First 1
+    # А вот ошибка полного списка — уже настоящий отказ: пусть валит проверку этого плагина.
+    $all = Invoke-GhJson "repos/$repo/releases?per_page=100"
+    $j = $all | Where-Object { $_.tag_name -and -not $_.draft } | Select-Object -First 1
   }
-  if (-not $j) { throw "не удалось получить релизы $repo (нужен gh/GH_TOKEN)" }
+  if (-not $j -or -not $j.tag_name) { throw "не удалось получить релизы $repo (нужен gh/GH_TOKEN)" }
   return $j
 }
 function Asset-Url($rel, $pattern) {
@@ -34,13 +48,15 @@ if ($m.yaxunit.update) {
   $checked++
   try {
     $rel = Get-GhLatest $m.yaxunit.update.repo
-    $nv = $rel.tag_name -replace '^v',''
+    $nv = ($rel.tag_name -replace '^v','')
+    if (-not $nv) { throw "пустая версия в релизе $($m.yaxunit.update.repo)" }
     if ($nv -ne $m.yaxunit.version) {
+      # Ассеты резолвим ДО записи в манифест и в DryRun тоже: так шаблон проверяется всегда,
+      # а неудача не оставляет манифест с новой версией и старыми/пустыми ссылками.
+      $urls = @($rel.assets | Where-Object { $_.name -match $m.yaxunit.update.asset } | ForEach-Object { $_.browser_download_url })
+      if (-not $urls.Count) { throw "в релизе $nv нет ассетов по шаблону '$($m.yaxunit.update.asset)'" }
       $changes += "YAXUnit: $($m.yaxunit.version) -> $nv"
-      if (-not $DryRun) {
-        $m.yaxunit.version = $nv
-        $m.yaxunit.assets = @($rel.assets | Where-Object { $_.name -match $m.yaxunit.update.asset } | ForEach-Object { $_.browser_download_url })
-      }
+      if (-not $DryRun) { $m.yaxunit.version = $nv; $m.yaxunit.assets = $urls }
     }
   } catch { Write-Warning "YAXUnit: пропуск проверки — $($_.Exception.Message)"; $failed += 'YAXUnit' }
 }
@@ -51,13 +67,27 @@ foreach ($p in $m.plugins) {
   $checked++
   try {
     switch ($p.update.kind) {
+      # ПОРЯДОК ВАЖЕН: сначала резолвим ассеты (может бросить), и только потом трогаем манифест.
+      # Раньше версия присваивалась первой, и падение Asset-Url оставляло в манифесте новую
+      # версию со старой ссылкой — а при наличии любого другого обновления это уезжало в main.
       'gh-release' {
         $rel = Get-GhLatest $p.update.repo; $nv = $rel.tag_name -replace '^v',''
-        if ($nv -ne $p.version) { $changes += "$($p.id): $($p.version) -> $nv"; if (-not $DryRun) { $p.version = $nv; $p.source.url = (Asset-Url $rel $p.update.asset) } }
+        if (-not $nv) { throw "пустая версия в релизе $($p.update.repo)" }
+        if ($nv -ne $p.version) {
+          $url = Asset-Url $rel $p.update.asset
+          $changes += "$($p.id): $($p.version) -> $nv"
+          if (-not $DryRun) { $p.version = $nv; $p.source.url = $url }
+        }
       }
       'gh-jars' {
         $rel = Get-GhLatest $p.update.repo; $nv = $rel.tag_name -replace '^v',''
-        if ($nv -ne $p.version) { $changes += "$($p.id): $($p.version) -> $nv"; if (-not $DryRun) { $p.version = $nv; $p.source.features = @(Asset-Url $rel $p.update.featureAsset); $p.source.plugins = @(Asset-Url $rel $p.update.pluginAsset) } }
+        if (-not $nv) { throw "пустая версия в релизе $($p.update.repo)" }
+        if ($nv -ne $p.version) {
+          $feat = Asset-Url $rel $p.update.featureAsset
+          $plug = Asset-Url $rel $p.update.pluginAsset
+          $changes += "$($p.id): $($p.version) -> $nv"
+          if (-not $DryRun) { $p.version = $nv; $p.source.features = @($feat); $p.source.plugins = @($plug) }
+        }
       }
       'gitlab-package' {
         $proj = [uri]::EscapeDataString($p.update.project)
@@ -71,8 +101,12 @@ foreach ($p in $m.plugins) {
 }
 
 if ($failed.Count) { Write-Warning ("Не удалось проверить $($failed.Count) из $checked источников: " + ($failed -join ', ')) }
-if ($checked -gt 0 -and $failed.Count -eq $checked) {
-  throw "ни один из $checked источников обновлений не ответил — считать «обновлений нет» нельзя (сеть/лимит API/токен)"
+# «Обновлений нет» достоверно только если проверено ВСЁ. Прежнее условие (упали все источники)
+# ловило лишь тотальный отказ: при недоступности одного провайдера — скажем, GitHub API при живом
+# GitLab — прогон снова был бы зелёным и молчаливым. Если же что-то обновилось, идём дальше:
+# частичный отказ порядок присваиваний выше уже сделал безопасным.
+if ($failed.Count -and $changes.Count -eq 0) {
+  throw "проверка неполна: не ответили $($failed.Count) из $checked источников ($($failed -join ', ')) — «обновлений нет» недостоверно"
 }
 
 if ($changes.Count -eq 0) {

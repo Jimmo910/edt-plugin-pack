@@ -36,6 +36,7 @@ $sandbox = Join-Path $Build 'edt-sandbox'
 if (Test-Path $sandbox) { Remove-Item -Recurse -Force $sandbox }
 Write-Host "Копирую EDT в песочницу (несколько ГБ, подождите)..." -ForegroundColor Yellow
 Copy-Item -Recurse -Force $EdtHome $sandbox
+try {
 
 # профиль p2 целевой установки.
 # Каталог профиля называется '<id>.profile'; идентификатор профиля для director — это <id>
@@ -46,7 +47,17 @@ if (-not $profDir) { throw "Не найден профиль p2 в $profReg" }
 $profileId = $profDir -replace '\.profile$', ''
 Write-Host "Профиль: $profileId"
 
-$repoUri = To-FileUri $RepoOut
+# Проверяем ИМЕННО релизный архив, если он собран: в CI verify ставит из zip
+# (`jar:file:…!/`), а не из staging-каталога, и локальная проверка должна повторять тот же путь.
+$pkg  = $Manifest.package
+$zip  = Join-Path $Dist "$($pkg.name)-$($pkg.edtLine)-$($pkg.version).zip"
+if (Test-Path $zip) {
+  $repoUri = 'jar:' + (To-FileUri $zip) + '!/'
+  Write-Host "Источник: релизный архив $zip"
+} else {
+  $repoUri = To-FileUri $RepoOut
+  Write-Host "Источник: staging-каталог $RepoOut (архив не собран — запустите package.ps1)" -ForegroundColor Yellow
+}
 $iuList  = @(Get-Content (Join-Path $Build 'ius.txt') | Where-Object { $_ -match '\S' })
 $ius     = $iuList -join ','
 Write-Host "Ставлю IU: $ius"
@@ -67,3 +78,9 @@ if ($missing.Count) {
   throw "VERIFY FAILED ($EdtHome): не установились — $($missing -join ', ')"
 }
 Write-Host "VERIFY OK ($EdtHome): установлены все $($iuList.Count) фич" -ForegroundColor Green
+}
+finally {
+  # Песочница — копия EDT на несколько ГБ. Без finally она оставалась на диске при любом
+  # провале гейта (в Linux-варианте это закрыто trap'ом, здесь раньше не было).
+  if (Test-Path $sandbox) { Remove-Item -Recurse -Force $sandbox -ErrorAction SilentlyContinue }
+}

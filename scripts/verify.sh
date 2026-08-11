@@ -37,13 +37,18 @@ SANDBOX="${VERIFY_SANDBOX:-/tmp/edt-verify-sandbox}"
 # предпочитая точное совпадение. Строгое равенство сажало бы verify линии 2026.1 на один
 # лишь системный пакет openjdk-17: установка 2026.2 подняла общий axiom-jdk-компонент до 25,
 # и 17-го в составе EDT больше нет — снос пакета ронял бы verify обеих линий разом.
-req=$(sed -n 's/.*-Dosgi\.requiredJavaVersion=\([0-9][0-9]*\).*/\1/p' "$EDT_HOME/1cedt.ini" | head -1)
+# Без конвейера с `head`: `set -o pipefail` + ранний выход читателя — известные грабли этого репо.
+req=$(sed -n 's/.*-Dosgi\.requiredJavaVersion=\([0-9][0-9]*\).*/\1/p' "$EDT_HOME/1cedt.ini")
+req=${req%%$'\n'*}
 [ -n "$req" ] || { echo "не удалось прочитать requiredJavaVersion из $EDT_HOME/1cedt.ini"; exit 1; }
 JAVA_BIN=""; JAVA_VER=""
 for cand in /opt/1C/1CE/components/axiom-jdk-full-*/bin/java /usr/lib/jvm/*/bin/java "$(command -v java || true)"; do
   [ -x "$cand" ] || continue
-  v=$("$cand" -version 2>&1 | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p')
-  [ -n "$v" ] || continue
+  # Кандидат может быть нерабочим (битый пакет, чужая архитектура): под set -e + pipefail
+  # присваивание из падающего конвейера убило бы скрипт молча, до проверки ниже.
+  vout=$("$cand" -version 2>&1) || continue
+  [[ $vout =~ version\ \"([0-9]+) ]] || continue
+  v="${BASH_REMATCH[1]}"
   [ "$v" -ge "$req" ] 2>/dev/null || continue
   [ -n "$JAVA_BIN" ] || { JAVA_BIN="$cand"; JAVA_VER="$v"; }          # первая подходящая — запасной вариант
   [ "$v" = "$req" ] && { JAVA_BIN="$cand"; JAVA_VER="$v"; break; }    # точное совпадение лучше
@@ -61,8 +66,12 @@ echo ">> java   =$JAVA_BIN (Java $JAVA_VER, EDT требует >= $req)"
 # а заодно подметаем брошенные песочницы прошлых прогонов старше суток.
 cleanup() { rm -rf "$SANDBOX"; }
 trap cleanup EXIT INT TERM
+# ВНИМАНИЕ: критерий возраста — ctime, а НЕ mtime. `cp -a` сохраняет mtime исходной EDT (у неё
+# дата установки), поэтому по mtime свежесозданная песочница выглядела бы старой и попала бы под
+# снос — сегодня недостижимо (раннер один, job'ы сериализуются), но убило бы соседний job сразу,
+# как только verify начнут гонять параллельно. ctime у копии выставляется в момент создания.
 case "$SANDBOX" in
-  /tmp/*) find /tmp -maxdepth 1 -type d -name 'verify-*' -mtime +0 -exec rm -rf {} + 2>/dev/null || true ;;
+  /tmp/*) find /tmp -maxdepth 1 -type d -name 'verify-*' ! -path "$SANDBOX" -ctime +0 -exec rm -rf {} + 2>/dev/null || true ;;
 esac
 
 # Ставим в изолированную копию EDT, чтобы не портить эталонную установку.

@@ -41,6 +41,14 @@ jobs:
           $eclHome = Join-Path "$env:RUNNER_TEMP\ecl" 'eclipse'
           if (-not (Get-ChildItem (Join-Path $eclHome 'plugins') -Filter 'org.eclipse.equinox.launcher_*.jar')) { throw "launcher не найден" }
           "ECLIPSE_HOME=$eclHome" >> $env:GITHUB_ENV
+      # Единственный тест репозитория и оба гейта согласованности раньше запускались только
+      # руками — то есть на практике не запускались вовсе.
+      - name: Тесты и гейты согласованности
+        shell: pwsh
+        run: |
+          .\scripts\tests\sync-readme.tests.ps1
+          .\scripts\sync-version.ps1 -Check
+          .\scripts\sync-readme.ps1 -Check
       - name: Собрать набор (${{ matrix.target }})
         shell: pwsh
         run: .\scripts\build.ps1 -Target ${{ matrix.target }}
@@ -79,9 +87,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* | sort -V | tail -1)
+          # ls в конвейере под pipefail уже валит шаг, поэтому без `|| true` проверка ниже была
+          # мёртвой и сообщение «EDT не установлена» никогда не появлялось.
+          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* 2>/dev/null | sort -V | tail -1 || true)
           [ -n "$EDT_HOME" ] || { echo "EDT ${{ matrix.target }} не установлена на раннере"; exit 1; }
-          ZIP=$(ls artifact/*.zip | head -1)
+          ZIP=$(ls -1 artifact/*.zip); ZIP=${ZIP%%$'\n'*}
           IUS=$(tr -d '\r' < artifact/ius.txt | paste -sd, -)
           chmod +x scripts/verify.sh
           export VERIFY_SANDBOX="/tmp/verify-${{ matrix.target }}-${GITHUB_RUN_ID}"

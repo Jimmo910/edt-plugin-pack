@@ -68,5 +68,8 @@ Invoke-P2App 'org.eclipse.equinox.p2.publisher.CategoryPublisher' @(
   '-categoryDefinition', (To-FileUri $catFile),
   '-categoryQualifier', ''
 )
-Remove-ForeignCategories $RepoOut @('edt.pack.main','edt.pack.mcp')
+# id категорий берём из манифеста, а не литералами: с хардкодом переименование категории
+# в манифесте привело бы к тому, что свою же новую категорию сочли «чужой» и удалили —
+# архив собрался бы, verify прошёл (он смотрит фичи), а в EDT нечего было бы отметить галочкой.
+Remove-ForeignCategories $RepoOut @($cats.PSObject.Properties.Name | ForEach-Object { $cats.$_.id })
 Write-Host "CATEGORIZE DONE" -ForegroundColor Green

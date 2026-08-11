@@ -72,12 +72,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Линий в артефактах должно быть ровно столько же, сколько манифестов: иначе матрица
-          # в этом workflow разошлась с manifests/ (или bump не отдал артефакт), и молчаливый
-          # результат был бы «обновлений нет» — зелёный прогон, который ничего не проверил.
-          n=$(find meta -mindepth 1 -maxdepth 1 -type d -name 'meta-*' | wc -l)
-          m=$(ls -1 manifests/*.json | wc -l)
-          [ "$n" -eq "$m" ] || { echo "линий в артефактах ($n) != манифестов ($m): матрица target разошлась с manifests/"; exit 1; }
+          # Сверяем ИМЕНА линий, а не количество: пара «лишний манифест + пропавший артефакт»
+          # по счёту сошлась бы, а по сути это расхождение матрицы target с manifests/.
+          have=$(find meta -mindepth 1 -maxdepth 1 -type d -name 'meta-*' -printf '%f\n' | sed 's/^meta-//' | sort | tr '\n' ' ')
+          want=$(ls -1 manifests/*.json | xargs -n1 basename | sed 's/\.json$//' | sort | tr '\n' ' ')
+          [ "$have" = "$want" ] || { echo "линии в артефактах [$have] != манифесты [$want]: матрица target разошлась с manifests/"; exit 1; }
+          # Расхождение версий В РЕПОЗИТОРИИ фиксируем ДО того, как накатим бампы. Код возврата
+          # -Check не зависит от текста сообщений (grep по русской строке был бы хрупким).
+          if pwsh -NoProfile -File scripts/sync-version.ps1 -Check >/dev/null 2>&1; then DIVERGED=0; else DIVERGED=1; fi
           # Линии не захардкожены: разбираем всё, что положил bump (meta/meta-<линия>/).
           SUM=""
           for d in meta/meta-*/; do
@@ -89,11 +91,13 @@ jobs:
           pwsh -NoProfile -File scripts/sync-version.ps1 >sv.out 2>sv.err || { cat sv.err; exit 1; }
           VER=$(cat sv.out); cat sv.err
           if [ -n "$SUM" ]; then CH=true; else CH=false; fi
-          # Выравнивание версий живёт только в артефакте. Если бампов нет, commit-release не
-          # запустится, и расхождение останется в репозитории — вылезет потом падением
-          # sync-version.ps1 -Check в build-release. Поэтому делаем его заметным сразу.
-          if grep -q 'версия ->' sv.err && [ "$CH" != "true" ]; then
-            echo "::warning::манифесты разъехались по package.version и выровнены только в артефакте — в репозитории расхождение осталось, поправьте вручную"
+          # Если версии разъехались, а бампов нет, commit-release не запустится: выравнивание
+          # останется только в артефакте, а в git расхождение переживёт прогон и позже уронит
+          # release-шаг build-release далеко от причины. Это состояние требует человека, поэтому
+          # валим job (issue заведёт on-failure), а не пишем предупреждение в зелёный прогон.
+          if [ "$DIVERGED" = 1 ] && [ "$CH" != "true" ]; then
+            echo "package.version в manifests/ разъехались, а обновлений нет — выравнивание не будет закоммичено. Поправьте версии в репозитории вручную."
+            exit 1
           fi
           {
             echo "changed=$CH"
@@ -161,8 +165,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* | sort -V | tail -1)
-          ZIP=$(ls artifact/*.zip | head -1)
+          EDT_HOME=$(ls -d /opt/1C/1CE/components/1c-edt-${{ matrix.target }}* 2>/dev/null | sort -V | tail -1 || true)
+          [ -n "$EDT_HOME" ] || { echo "EDT ${{ matrix.target }} не установлена на раннере"; exit 1; }
+          ZIP=$(ls -1 artifact/*.zip); ZIP=${ZIP%%$'\n'*}
           IUS=$(tr -d '\r' < artifact/ius.txt | paste -sd, -)
           chmod +x scripts/verify.sh
           export VERIFY_SANDBOX="/tmp/verify-${{ matrix.target }}-${GITHUB_RUN_ID}"
