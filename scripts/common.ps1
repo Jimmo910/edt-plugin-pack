@@ -1,8 +1,8 @@
 # scripts/common.ps1 — общие переменные и хелперы. Точка входа: . "$PSScriptRoot\common.ps1"
 $ErrorActionPreference = 'Stop'
 $script:Root      = Split-Path -Parent $PSScriptRoot
-# Манифест выбирается через env MANIFEST (путь относительно корня), иначе — 2025.2 по умолчанию.
-$script:ManifestPath = if ($env:MANIFEST) { Join-Path $Root $env:MANIFEST } else { Join-Path $Root 'manifests/2025.2.json' }
+# Манифест выбирается через env MANIFEST (путь относительно корня), иначе — 2026.1 по умолчанию.
+$script:ManifestPath = if ($env:MANIFEST) { Join-Path $Root $env:MANIFEST } else { Join-Path $Root 'manifests/2026.1.json' }
 if (-not (Test-Path $ManifestPath)) { throw "Манифест не найден: $ManifestPath (env MANIFEST=$($env:MANIFEST))" }
 $script:Manifest  = Get-Content $ManifestPath -Raw | ConvertFrom-Json
 $script:Build     = Join-Path $Root 'build'

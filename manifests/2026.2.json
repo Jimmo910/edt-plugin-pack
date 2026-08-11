@@ -1,10 +1,10 @@
 {
   "package": {
     "name": "EDT-Plugin-Pack",
-    "edtLine": "2025.2",
-    "version": "1.1.4"
+    "edtLine": "2026.2",
+    "version": "2.0.0"
   },
-  "edtHome": "C:\\Program Files\\1C\\1CE\\components\\1c-edt-2025.2.6+4-x86_64",
+  "edtHome": "C:\\Program Files\\1C\\1CE\\components\\1c-edt-2026.2.0+289-x86_64",
   "jdkGlob": "C:\\Program Files\\1C\\1CE\\components\\axiom-jdk-full-*",
   "categories": {
     "main": {
@@ -52,23 +52,22 @@
     {
       "id": "edt-editing",
       "name": "Disable Editing Plugin",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "license": "EPL-2.0",
       "category": "main",
       "featureId": "org.mard.dt.editing.feature",
       "repoUrl": "https://gitlab.com/marmyshev/edt-editing",
-      "comment": "hold: 0.7.0 требует Guava 33.5, которой нет ни в 2025.2, ни в 2026.1 — авто-бамп выключен до появления совместимости",
+      "comment": "0.7.0 импортирует com.google.common.cache [33.5.0,34.0.0): в 2026.2 Guava 33.5.0 есть, в 2026.1 только 32.1.3 — там держим 0.6.0 (issue #4)",
       "update": {
         "kind": "gitlab-package",
         "project": "marmyshev/edt-editing",
-        "package": "zip-p2",
-        "hold": true
+        "package": "zip-p2"
       },
       "source": {
         "type": "gitlab-package",
         "project": "marmyshev/edt-editing",
         "package": "zip-p2",
-        "packageVersion": "0.6.0",
+        "packageVersion": "0.7.0",
         "file": "repo.zip"
       }
     },

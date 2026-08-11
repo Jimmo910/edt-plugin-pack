@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ['2025.2', '2026.1']
+        target: ['2026.1', '2026.2']
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ['2025.2', '2026.1']
+        target: ['2026.1', '2026.2']
     runs-on: [self-hosted, edt]
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
           export VERIFY_SANDBOX="/tmp/verify-${{ matrix.target }}-${GITHUB_RUN_ID}"
           scripts/verify.sh "$EDT_HOME" "jar:file:$(realpath "$ZIP")!/" "$IUS"
 
-  # 3) ОДИН релиз с ДВУМЯ архивами (2025.2 и 2026.1) — только если verify прошёл и release=true.
+  # 3) ОДИН релиз со всеми архивами (по одному на линию EDT) — только если verify прошёл и release=true.
   release:
     needs: verify
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
@@ -94,13 +94,15 @@ jobs:
           pattern: pack-*
           path: artifacts
           merge-multiple: true
-      - name: Создать единый релиз с двумя архивами
+      - name: Создать единый релиз со всеми архивами
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES_PREFIX: ${{ inputs.notes_prefix }}
         run: |
           set -euo pipefail
-          VER=$(jq -r .package.version manifests/2025.2.json)
+          # -Check печатает общую версию и падает, если манифесты линий разъехались:
+          # тег и имена архивов должны быть от одной версии набора.
+          VER=$(pwsh -NoProfile -File scripts/sync-version.ps1 -Check)
           TAG="v$VER"
           ZIPS=$(ls artifacts/*.zip)
           NOTES=$(bash scripts/release-notes.sh "$VER" "$NOTES_PREFIX")

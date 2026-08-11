@@ -33,40 +33,40 @@ try {
 | [Unmatched](https://github.com/acme/ghost) | 9.9 | MIT | not in manifest |
 '@ | Set-Content -Path $readme -Encoding utf8
 
-  $m25 = Join-Path $tmp '2025.2.json'
-  @'
-{ "package": { "edtLine": "2025.2" },
-  "yaxunit": { "version": "0.2", "update": { "repo": "acme/yax" } },
-  "plugins": [
-    { "id": "alpha", "version": "1.5.0", "repoUrl": "https://github.com/acme/alpha" },
-    { "id": "beta",  "version": "2.0.0", "repoUrl": "https://gitlab.com/acme/beta" }
-  ] }
-'@ | Set-Content -Path $m25 -Encoding utf8
-
-  $m26 = Join-Path $tmp '2026.1.json'
+  $m261 = Join-Path $tmp '2026.1.json'
   @'
 { "package": { "edtLine": "2026.1" },
   "yaxunit": { "version": "0.2", "update": { "repo": "acme/yax" } },
   "plugins": [
     { "id": "alpha", "version": "1.5.0", "repoUrl": "https://github.com/acme/alpha" },
+    { "id": "beta",  "version": "2.0.0", "repoUrl": "https://gitlab.com/acme/beta" }
+  ] }
+'@ | Set-Content -Path $m261 -Encoding utf8
+
+  $m262 = Join-Path $tmp '2026.2.json'
+  @'
+{ "package": { "edtLine": "2026.2" },
+  "yaxunit": { "version": "0.2", "update": { "repo": "acme/yax" } },
+  "plugins": [
+    { "id": "alpha", "version": "1.5.0", "repoUrl": "https://github.com/acme/alpha" },
     { "id": "beta",  "version": "2.1.0", "repoUrl": "https://gitlab.com/acme/beta" }
   ] }
-'@ | Set-Content -Path $m26 -Encoding utf8
+'@ | Set-Content -Path $m262 -Encoding utf8
 
-  $rc = Invoke-Sync $readme @($m25,$m26) -Check
+  $rc = Invoke-Sync $readme @($m261,$m262) -Check
   Assert ($rc -eq 1) "-Check возвращает 1, когда README разошёлся с манифестами"
 
-  $rc = Invoke-Sync $readme @($m25,$m26)
+  $rc = Invoke-Sync $readme @($m261,$m262)
   Assert ($rc -eq 0) "режим правки завершается кодом 0"
   $out = Get-Content $readme -Raw
 
   Assert ($out -match '\[Alpha\]\([^)]+\)\s*\|\s*1\.5\.0\s*\|')                              "совпадающие версии -> одно значение (Alpha 1.5.0)"
-  Assert ($out -match '\[Beta\]\([^)]+\)\s*\|\s*2\.0\.0 \(2025\.2\) / 2\.1\.0 \(2026\.1\)\s*\|') "расхождение -> обе версии (Beta)"
+  Assert ($out -match '\[Beta\]\([^)]+\)\s*\|\s*2\.0\.0 \(2026\.1\) / 2\.1\.0 \(2026\.2\)\s*\|') "расхождение -> обе версии (Beta)"
   Assert ($out -match '\[Yax\]\([^)]+\)\s*\|\s*0\.2\s*\|')                                    "версия из блока yaxunit (Yax 0.2)"
   Assert ($out -match '\[Unmatched\]\([^)]+\)\s*\|\s*9\.9\s*\|')                              "строка без совпадения не тронута (9.9)"
   Assert ($out -match 'MIT \| does alpha')                                                    "колонки лицензии/описания сохранены"
 
-  $rc = Invoke-Sync $readme @($m25,$m26) -Check
+  $rc = Invoke-Sync $readme @($m261,$m262) -Check
   Assert ($rc -eq 0) "-Check возвращает 0, когда README в синхроне"
 }
 finally { Remove-Item -Recurse -Force $tmp }

@@ -2,9 +2,9 @@
   "package": {
     "name": "EDT-Plugin-Pack",
     "edtLine": "2026.1",
-    "version": "1.1.4"
+    "version": "2.0.0"
   },
-  "edtHome": "C:\\Program Files\\1C\\1CE\\components\\1c-edt-2025.2.6+4-x86_64",
+  "edtHome": "C:\\Program Files\\1C\\1CE\\components\\1c-edt-2026.1.1+1-x86_64",
   "jdkGlob": "C:\\Program Files\\1C\\1CE\\components\\axiom-jdk-full-*",
   "categories": {
     "main": {
@@ -57,7 +57,7 @@
       "category": "main",
       "featureId": "org.mard.dt.editing.feature",
       "repoUrl": "https://gitlab.com/marmyshev/edt-editing",
-      "comment": "0.7.0 требует Guava 33.5, которой нет ни в 2025.2, ни в 2026.1 → пин 0.6.0 (проверено verify)",
+      "comment": "hold: 0.7.0 импортирует com.google.common.cache [33.5.0,34.0.0), а 2026.1 несёт Guava 32.1.3 → пин 0.6.0. В линии 2026.2 (Guava 33.5.0) стоит 0.7.0 — см. issue #4",
       "update": {
         "kind": "gitlab-package",
         "project": "marmyshev/edt-editing",

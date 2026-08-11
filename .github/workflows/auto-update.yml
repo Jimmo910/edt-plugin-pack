@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ['2025.2', '2026.1']
+        target: ['2026.1', '2026.2']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,23 +41,63 @@ jobs:
           name: meta-${{ matrix.target }}
           path: out/
 
-  # 2) Сборка с (возможно) обновлённым манифестом.
-  build:
+  # 2) Барьер: собираем бампы всех линий в один набор манифестов и выравниваем версию.
+  #    check-updates.ps1 бампит package.version в СВОЁМ манифесте, а линии обновляются
+  #    независимо (составы у них расходятся). Версия набора одна и входит в имя архива,
+  #    поэтому выравнивать надо ДО сборки: иначе в релизе v2.0.1 оказался бы
+  #    EDT-Plugin-Pack-2026.1-2.0.0.zip, а README.txt внутри ссылался бы на чужое имя.
+  sync:
     needs: bump
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.s.outputs.changed }}
+      version: ${{ steps.s.outputs.version }}
+      summary: ${{ steps.s.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: meta-*
+          path: meta
+      - id: s
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Линии не захардкожены: разбираем всё, что положил bump (meta/meta-<линия>/).
+          SUM=""
+          for d in meta/meta-*/; do
+            line=$(basename "$d"); line=${line#meta-}
+            [ "$(cat "$d/changed.txt")" = "true" ] || continue
+            cp "$d/manifest.json" "manifests/$line.json"
+            SUM="$SUM $line: $(cat "$d/summary.txt");"
+          done
+          VER=$(pwsh -NoProfile -File scripts/sync-version.ps1)
+          if [ -n "$SUM" ]; then CH=true; else CH=false; fi
+          {
+            echo "changed=$CH"
+            echo "version=$VER"
+            echo "summary=$SUM"
+          } >> "$GITHUB_OUTPUT"
+          echo "версия набора: $VER; изменения:${SUM:- нет}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifests
+          path: manifests/
+
+  # 3) Сборка с (возможно) обновлёнными манифестами — берём их из артефакта sync.
+  build:
+    needs: sync
     strategy:
       fail-fast: false
       matrix:
-        target: ['2025.2', '2026.1']
+        target: ['2026.1', '2026.2']
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: meta-${{ matrix.target }}
-          path: meta
-      - name: Применить обновлённый манифест
-        shell: pwsh
-        run: Copy-Item meta\manifest.json "manifests\${{ matrix.target }}.json" -Force
+          name: manifests
+          path: manifests
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -81,13 +121,13 @@ jobs:
           path: build/dist/*
           if-no-files-found: error
 
-  # 3) Verify на реальной EDT (self-hosted). Если упадёт — job красный, release не будет.
+  # 4) Verify на реальной EDT (self-hosted). Если упадёт — job красный, release не будет.
   verify:
     needs: build
     strategy:
       fail-fast: false
       matrix:
-        target: ['2025.2', '2026.1']
+        target: ['2026.1', '2026.2']
     runs-on: [self-hosted, edt]
     steps:
       - uses: actions/checkout@v4
@@ -106,9 +146,11 @@ jobs:
           export VERIFY_SANDBOX="/tmp/verify-${{ matrix.target }}-${GITHUB_RUN_ID}"
           scripts/verify.sh "$EDT_HOME" "jar:file:$(realpath "$ZIP")!/" "$IUS"
 
-  # 4) Коммит бампов в main + ОДИН релиз с двумя архивами — только если verify прошёл И что-то изменилось.
+  # 5) Коммит бампов в main + ОДИН релиз со всеми архивами — только если verify прошёл
+  #    И что-то изменилось (иначе job просто пропускается).
   commit-release:
-    needs: verify
+    needs: [sync, verify]
+    if: ${{ needs.sync.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     outputs:
       released: ${{ steps.cr.outputs.released }}
@@ -116,8 +158,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: meta-*
-          path: meta
+          name: manifests
+          path: synced
       - uses: actions/download-artifact@v4
         with:
           pattern: pack-*
@@ -127,22 +169,21 @@ jobs:
         id: cr
         env:
           GH_TOKEN: ${{ github.token }}
+          VER: ${{ needs.sync.outputs.version }}
+          SUM: ${{ needs.sync.outputs.summary }}
         run: |
           set -euo pipefail
-          CH25=$(cat meta/meta-2025.2/changed.txt); CH26=$(cat meta/meta-2026.1/changed.txt)
-          if [ "$CH25" != "true" ] && [ "$CH26" != "true" ]; then echo "обновлений нет"; echo "released=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git checkout -B main origin/main
-          SUM=""
-          if [ "$CH25" = "true" ]; then cp meta/meta-2025.2/manifest.json manifests/2025.2.json; git add manifests/2025.2.json; SUM="$SUM 2025.2: $(cat meta/meta-2025.2/summary.txt);"; fi
-          if [ "$CH26" = "true" ]; then cp meta/meta-2026.1/manifest.json manifests/2026.1.json; git add manifests/2026.1.json; SUM="$SUM 2026.1: $(cat meta/meta-2026.1/summary.txt);"; fi
+          # манифесты копируем ПОСЛЕ checkout: он бы затёр их содержимым origin/main
+          cp synced/*.json manifests/
+          git add manifests
           pwsh scripts/sync-readme.ps1   # привести версии в README к манифестам
           git add README.md
           git commit -m "chore: авто-обновление —$SUM"
           git push origin main
-          VER=$(jq -r .package.version manifests/2025.2.json)
           TAG="v$VER"
           ZIPS=$(ls artifacts/*.zip)
           NOTES=$(bash scripts/release-notes.sh "$VER" "Авто-обновление:$SUM")
@@ -154,7 +195,7 @@ jobs:
           fi
           echo "released=true" >> "$GITHUB_OUTPUT"
 
-  # 5) Публикация update site на Pages — только если релиз реально был.
+  # 6) Публикация update site на Pages — только если релиз реально был.
   publish-pages:
     needs: commit-release
     if: ${{ needs.commit-release.outputs.released == 'true' }}
@@ -164,14 +205,14 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-pages.yml
 
-  # 6) Если что-то упало ИЛИ было отменено — issue.
+  # 7) Если что-то упало ИЛИ было отменено — issue.
   #    failure() ложен, когда прогон ОТМЕНЁН: так бывает, если verify сутки ждёт
   #    мёртвого self-hosted runner'а и GitHub убивает job по 24ч-таймауту очереди.
   #    Раньше issue в этом случае не заводился и поломка жила незамеченной
   #    (прогон 29729125446 от 2026-07-20: verify cancelled, on-failure skipped).
   #    always() + разбор needs.*.result ловит оба исхода.
   on-failure:
-    needs: [bump, build, verify, commit-release, publish-pages]
+    needs: [bump, sync, build, verify, commit-release, publish-pages]
     if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     steps:
