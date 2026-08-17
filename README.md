@@ -31,6 +31,9 @@
 Составы линий совпадают, кроме **Disable Editing Plugin**: на 2026.2 идёт 0.7.0, на 2026.1 — 0.6.0
 (0.7.0 требует Guava 33.5, а 2026.1 несёт 32.1.3).
 
+Что менялось от релиза к релизу — в [CHANGELOG.md](CHANGELOG.md) (собирается автоматически) и в
+описании каждого релиза на странице [Releases](https://github.com/Jimmo910/edt-plugin-pack/releases).
+
 ## Требования
 - Установленная **1C:EDT 2026.1 или 2026.2** — больше для установки ничего не нужно.
   (Java отдельно не нужна: 2026.1 работает на Java 17, 2026.2 — на Java 25, обе берут её из состава EDT.)
@@ -94,6 +97,8 @@ pwsh -NoProfile -File scripts/build.ps1 -Target 2026.1   # или -Target 2026.2
 Результат — `build/dist/EDT-Plugin-Pack-<edtLine>-<версия>.zip`. Проверка установки на копии EDT:
 `scripts/verify.ps1` (Windows) или `scripts/verify.sh` (Linux). Папка `build/` — рабочая, в git не попадает.
 `p2/category.xml` генерируется при сборке (в git его нет).
+`CHANGELOG.md` тоже генерируется — `scripts/changelog.sh [версия]` собирает его из тегов и коммитов,
+оба релизных workflow обновляют файл сами; править руками бесполезно.
 
 ### Как добавить плагин или версию EDT
 Добавить **плагин** — объект в `plugins[]` в `manifests/2026.1.json` и `manifests/2026.2.json`:

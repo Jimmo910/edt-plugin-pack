@@ -109,11 +109,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Нужны теги и полная история: из них строятся «Что изменилось» в описании релиза
+          # и CHANGELOG.md. По умолчанию checkout берёт один коммит и без тегов.
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           pattern: pack-*
           path: artifacts
           merge-multiple: true
+      # CHANGELOG обновляем ДО создания релиза, чтобы он уехал в main одним осмысленным коммитом.
+      # Только с main: ручной прогон можно запустить с ветки, и пушить оттуда в main нельзя.
+      - name: Обновить CHANGELOG в main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          VER=$(pwsh -NoProfile -File scripts/sync-version.ps1 -Check)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          bash scripts/changelog.sh "$VER"
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "CHANGELOG уже актуален"
+          else
+            git commit -m "docs: CHANGELOG для v$VER"
+            git push origin main
+          fi
       - name: Создать единый релиз со всеми архивами
         env:
           GH_TOKEN: ${{ github.token }}

@@ -202,6 +202,9 @@ jobs:
       released: ${{ steps.cr.outputs.released }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Теги и история нужны для «Что изменилось» в описании релиза и для CHANGELOG.md.
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: manifests
@@ -235,6 +238,11 @@ jobs:
             echo "нечего коммитить: main уже содержит эти бампы (повторный запуск job)"
           else
             git commit -m "chore: авто-обновление —$SUM"
+            # CHANGELOG собирается ПОСЛЕ коммита (чтобы он видел сам бамп) и вливается в него
+            # amend'ом — до push, поэтому переписывания опубликованной истории тут нет.
+            bash scripts/changelog.sh "$VER"
+            git add CHANGELOG.md
+            git diff --cached --quiet || git commit --amend --no-edit
             git push origin main
           fi
           TAG="v$VER"
