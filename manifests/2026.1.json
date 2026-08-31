@@ -2,7 +2,7 @@
   "package": {
     "name": "EDT-Plugin-Pack",
     "edtLine": "2026.1",
-    "version": "2.1.1"
+    "version": "2.1.2"
   },
   "edtHome": "C:\\Program Files\\1C\\1CE\\components\\1c-edt-2026.1.2+2-x86_64",
   "jdkGlob": "C:\\Program Files\\1C\\1CE\\components\\axiom-jdk-full-*",
@@ -189,7 +189,7 @@
     {
       "id": "edt-comfort",
       "name": "EDT Comfort",
-      "version": "1.0.0.31",
+      "version": "1.0.0.33",
       "license": "MIT",
       "category": "main",
       "featureId": "tormozit.comfort.feature",
@@ -201,7 +201,7 @@
       },
       "source": {
         "type": "zip",
-        "url": "https://github.com/tormozit/EDT.Comfort/releases/download/1.0.0.31/Comfort.zip"
+        "url": "https://github.com/tormozit/EDT.Comfort/releases/download/1.0.0.33/Comfort.zip"
       }
     }
   ]
