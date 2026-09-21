@@ -9,7 +9,7 @@
 #
 # Использование:
 #   verify.sh <EDT_HOME> <REPO_URI> <IUS>
-#     EDT_HOME — каталог установленной EDT (например /opt/1C/1CE/components/1c-edt-2026.2.0+289-x86_64)
+#     EDT_HOME — каталог установленной EDT (например /opt/1C/1CE/components/1c-edt-2026.2.1+3-x86_64)
 #     REPO_URI — p2-репозиторий: "jar:file:/path/pack.zip!/" (zip) или "file:/path/site" (каталог)
 #     IUS      — список feature.group через запятую
 #   Песочницу можно переопределить переменной VERIFY_SANDBOX.
