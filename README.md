@@ -24,9 +24,9 @@
 | [Configuration Repository (PluginEDT)](https://github.com/ZigRinat85/PluginEDT) | 0.4.0 | EPL-2.0 | работа с хранилищем конфигурации 1С |
 | [AnyEdit Tools](https://github.com/iloveeclipse/anyedittools) | 2.7.3 | EPL-2.0 | сравнение, буфер обмена, автоформат |
 | [IndentGuide](https://github.com/marmyshev/indent-guide) | 2.2.5 | MIT | направляющие отступов в редакторе |
-| [Git Flow](https://github.com/Oxotka/git-flow-edt) | 0.17.0 | MIT | подготовка файлов, коммиты, синхронизация, ветки и граф истории (только EDT 2026.1) |
 | [EDT Fast Button](https://github.com/Jimmo910/edt-fast-button) | 0.1.5 | EPL-2.0 | быстрые кнопки безопасных Git-операций |
 | [EDT Comfort](https://github.com/tormozit/EDT.Comfort) | 1.0.5 | MIT | навигация, наборы объектов, редактор BSL, отладка, сравнение; интеграция с ИР |
+| [Git Flow](https://github.com/Oxotka/git-flow-edt) | 0.17.0 | MIT | подготовка файлов, коммиты, синхронизация, ветки и граф истории (только EDT 2026.1) |
 | [EDT MCP Server](https://github.com/DitriXNew/EDT-MCP) | 2.20.1 | **AGPL-3.0** | MCP-сервер для AI-ассистентов _(отдельная категория)_ |
 | [YAXUnit](https://github.com/bia-technologies/yaxunit) | 25.12 | Apache-2.0 | движок тестов — расширение 1С `.cfe` (не плагин EDT, ставится в ИБ) |
 
