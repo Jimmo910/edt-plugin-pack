@@ -203,6 +203,24 @@
         "type": "zip",
         "url": "https://github.com/tormozit/EDT.Comfort/releases/download/1.0.5/Comfort.zip"
       }
+    },
+    {
+      "id": "git-flow",
+      "name": "Git Flow",
+      "version": "0.17.0",
+      "license": "MIT",
+      "category": "main",
+      "featureId": "dev.edt.gitflow.feature",
+      "repoUrl": "https://github.com/Oxotka/git-flow-edt",
+      "update": {
+        "kind": "gh-release",
+        "repo": "Oxotka/git-flow-edt",
+        "asset": "^GitFlow-.*\\.zip$"
+      },
+      "source": {
+        "type": "zip",
+        "url": "https://github.com/Oxotka/git-flow-edt/releases/download/v0.17.0/GitFlow-0.17.0.zip"
+      }
     }
   ]
 }
