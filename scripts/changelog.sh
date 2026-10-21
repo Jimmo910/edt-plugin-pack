@@ -25,7 +25,7 @@ if [ "${#TAGS[@]}" -eq 0 ] && [ -z "$PENDING" ]; then
 fi
 
 # Коммиты в диапазоне, отсортированные так же, как их видит git log (новые сверху).
-# Мержи выкидываем: в этом репозитории история линейная, а мерж-коммиты дали бы шум.
+# Мержи выкидываем: мерж-коммит лишь дублирует коммиты, которые он приносит.
 # --invert-grep вместо конвейера с grep: служебные коммиты «docs: CHANGELOG для …» — это
 # бухгалтерия самого changelog'а, в истории изменений они лишний шум.
 log_range() { git log --no-merges --invert-grep --grep='^docs: CHANGELOG' --format='- %s' "$@" 2>/dev/null || true; }
@@ -41,6 +41,9 @@ log_range() { git log --no-merges --invert-grep --grep='^docs: CHANGELOG' --form
   if [ -n "$PENDING" ]; then
     last="${TAGS[0]:-}"
     body=$(if [ -n "$last" ]; then log_range "$last..HEAD"; else log_range HEAD; fi)
+    if [ -f "changelog/v$PENDING.md" ]; then
+      body=$(cat "changelog/v$PENDING.md")
+    fi
     printf '## v%s — %s\n\n%s\n\n' "$PENDING" "$(date -u +%Y-%m-%d)" "${body:-- без изменений в коде}"
   fi
 
@@ -49,6 +52,11 @@ log_range() { git log --no-merges --invert-grep --grep='^docs: CHANGELOG' --form
     older="${TAGS[$((i+1))]:-}"
     when=$(git log -1 --format=%ad --date=short "$t" 2>/dev/null || echo '?')
     if [ -n "$older" ]; then body=$(log_range "$older..$t"); else body=$(log_range "$t"); fi
+    # Если темы коммитов версии вводят в заблуждение, историю main не переписываем —
+    # текст секции берём из файла переопределения этой версии.
+    if [ -f "changelog/$t.md" ]; then
+      body=$(cat "changelog/$t.md")
+    fi
     printf '## %s — %s\n\n%s\n\n' "$t" "$when" "${body:-- нет коммитов в этом диапазоне}"
   done
 } > "$OUT"
