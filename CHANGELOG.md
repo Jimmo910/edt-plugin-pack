@@ -4,6 +4,10 @@
 править вручную бесполезно, изменения затрутся. Архивы каждого релиза — на странице
 [Releases](https://github.com/Jimmo910/edt-plugin-pack/releases).
 
+## v2.2.3 — 2026-11-09
+
+- chore: авто-обновление — 2026.1: plugin-edt: 0.4.0 -> 2026.2.1; edt-mcp: 2.22.1 -> 2.23.1; edt-comfort: 1.0.8 -> 1.0.9; git-flow: 0.17.2 -> 0.17.4; 2026.2: plugin-edt: 0.4.0 -> 2026.2.1; edt-mcp: 2.22.1 -> 2.23.1; edt-comfort: 1.0.8 -> 1.0.9; git-flow: 0.17.2 -> 0.17.4;
+
 ## v2.2.2 — 2026-11-02
 
 - chore: авто-обновление — 2026.1: edt-extension-tweaks: 1.1.22 -> 1.1.29; edt-mcp: 2.21.1 -> 2.22.1; edt-comfort: 1.0.5 -> 1.0.8; git-flow: 0.17.1 -> 0.17.2; 2026.2: edt-extension-tweaks: 1.1.22 -> 1.1.29; edt-mcp: 2.21.1 -> 2.22.1; edt-comfort: 1.0.5 -> 1.0.8; git-flow: 0.17.1 -> 0.17.2;
